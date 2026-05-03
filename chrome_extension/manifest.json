@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Neuro Copilot",
+  "version": "1.0",
+  "description": "AI Agent for Connectomics",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_title": "Open Neuro Copilot",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}
