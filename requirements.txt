@@ -1,0 +1,11 @@
+anthropic
+caveclient
+cloud-volume
+fastapi
+httpx
+httpx-sse
+mcp
+nglui
+pandas
+pydantic
+uvicorn
