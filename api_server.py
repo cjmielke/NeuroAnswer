@@ -29,6 +29,7 @@ print(f'Using {CLAUDE_MODEL}')
 # 1. Setup the API and clients
 app = FastAPI()
 anthropic_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+conversation_history: list = []
 MCP_SERVER_URL = "http://127.0.0.1:8000/sse"
 
 
@@ -78,19 +79,19 @@ async def handle_chat(request: ExtensionRequest):
             ]
 
             # 6. The Agent Loop
-            messages = [{"role": "user", "content": contextual_prompt}]
+            conversation_history.append({"role": "user", "content": contextual_prompt})
 
             while True:
                 # Ask Claude what to do
                 response = await anthropic_client.messages.create(
                     model=CLAUDE_MODEL,
                     max_tokens=2000,
-                    messages=messages,
+                    messages=conversation_history,
                     tools=anthropic_tools
                 )
 
                 # Append Claude's response to the history
-                messages.append({"role": "assistant", "content": response.content})
+                conversation_history.append({"role": "assistant", "content": response.content})
 
                 # If Claude wants to use a tool, execute it and loop back
                 if response.stop_reason == "tool_use":
@@ -102,7 +103,7 @@ async def handle_chat(request: ExtensionRequest):
                             result = await mcp.call_tool(content_block.name, content_block.input)
 
                             # Pass the result back to Claude
-                            messages.append({
+                            conversation_history.append({
                                 "role": "user",
                                 "content": [
                                     {
@@ -123,6 +124,12 @@ async def handle_chat(request: ExtensionRequest):
     #except Exception as e:
     #    #return {"reply": f"Error connecting to MCP server or Anthropic API: {str(e)}"}
     #    raise
+
+@app.post("/reset")
+async def reset_conversation():
+    conversation_history.clear()
+    return {"status": "conversation cleared"}
+
 
 if __name__ == "__main__":
     import uvicorn
