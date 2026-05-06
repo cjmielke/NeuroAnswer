@@ -1,10 +1,13 @@
 import os
+import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 from mcp import ClientSession
 from mcp.client.sse import sse_client
+from rich.console import Console
+console = Console()
 
 
 from anthropic import Anthropic, AsyncAnthropic
@@ -30,7 +33,7 @@ print(f'Using {CLAUDE_MODEL}')
 app = FastAPI()
 anthropic_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 conversation_history: list = []
-MCP_SERVER_URL = "http://127.0.0.1:8000/sse"
+MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8000/sse")
 
 
 # 2. CORS is CRITICAL for Chrome Extensions
@@ -80,6 +83,7 @@ async def handle_chat(request: ExtensionRequest):
 
             # 6. The Agent Loop
             conversation_history.append({"role": "user", "content": contextual_prompt})
+            scene_urls = []
 
             while True:
                 # Ask Claude what to do
@@ -99,17 +103,35 @@ async def handle_chat(request: ExtensionRequest):
                         if content_block.type == "tool_use":
                             print(f"Executing tool: {content_block.name} with inputs: {content_block.input}")
 
-                            # Call your FastMCP tool
-                            result = await mcp.call_tool(content_block.name, content_block.input)
+                            # --- OBSERVABILITY INTERCEPT ---
+                            console.print(f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
+                            console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
 
-                            # Pass the result back to Claude
+                            result = await mcp.call_tool(content_block.name, content_block.input)
+                            raw_text = result.content[0].text
+
+                            # --- OBSERVABILITY INTERCEPT ---
+                            # Truncate long results so it doesn't flood your terminal
+                            short_result = raw_text[:300] + "..." if len(raw_text) > 300 else raw_text
+                            console.print(f"[green]📤 Result:[/green] {short_result}\n")
+                            # -------------------------------
+
+                            # Intercept scene URLs so Claude never sees the giant hash string
+                            try:
+                                tool_data = json.loads(raw_text)
+                                if tool_data.get("scene_url"):
+                                    scene_urls.append(tool_data["scene_url"])
+                                clean_result = tool_data.get("summary", raw_text)
+                            except json.JSONDecodeError:
+                                clean_result = raw_text
+
                             conversation_history.append({
                                 "role": "user",
                                 "content": [
                                     {
                                         "type": "tool_result",
                                         "tool_use_id": content_block.id,
-                                        "content": result.content[0].text
+                                        "content": clean_result
                                     }
                                 ]
                             })
@@ -119,7 +141,7 @@ async def handle_chat(request: ExtensionRequest):
                         (block.text for block in response.content if block.type == "text"),
                         "Done."
                     )
-                    return {"reply": final_text}
+                    return {"reply": final_text, "scene_urls": scene_urls}
 
     #except Exception as e:
     #    #return {"reply": f"Error connecting to MCP server or Anthropic API: {str(e)}"}
@@ -135,4 +157,4 @@ if __name__ == "__main__":
     import uvicorn
 
     # Run the orchestrator on port 8080 (since your FastMCP is on 8000)
-    uvicorn.run("api_server:app", host="127.0.0.1", port=8080, reload=True)
+    uvicorn.run("api_server:app", host="0.0.0.0", port=8080, reload=True)

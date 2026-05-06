@@ -1,9 +1,13 @@
+import time
+
+from nglui import statebuilder
+from nglui.statebuilder import PointAnnotation, LineAnnotation
 from pydantic import Field
 
 from mcp_src.core import mcp_server, cave_client, session
 import pandas as pd
 from typing import Literal
-
+import json
 
 @mcp_server.tool()
 def get_downstream_synapses(
@@ -14,10 +18,31 @@ def get_downstream_synapses(
     Queries the structural graph for downstream targets of a specific cell ID.
     Returns a memory_reference_id to be passed to visualization tools.
     """
+    voxel_res = cave_client.info.viewer_resolution()
+    print(f'voxel resolution : {voxel_res}')
     df_synapses = cave_client.materialize.query_table(
         'synapses_pni_2',
-        filter_equal_dict={'pre_pt_root_id': neuron_root_id}
+        filter_equal_dict={'pre_pt_root_id': neuron_root_id},
+        #desired_resolution=[1, 1, 1]
+        desired_resolution=voxel_res.tolist()
     )
+    if df_synapses.empty:
+        return json.dumps({"summary": f"No outgoing synapses found for {neuron_root_id}."})
+    print(f'Got {len(df_synapses)} rows from pre_pt_root_id')
+    print(df_synapses.sort_values('id').head(2).to_string())
+
+
+    df_synapses = cave_client.materialize.query_table(
+        'synapses_pni_2',
+        filter_equal_dict={'pre_pt_root_id': neuron_root_id},
+        desired_resolution=[1, 1, 1]
+        #desired_resolution=voxel_res.tolist()
+    )
+    if df_synapses.empty:
+        return json.dumps({"summary": f"No outgoing synapses found for {neuron_root_id}."})
+    print(f'Got {len(df_synapses)} rows from pre_pt_root_id')
+    print(df_synapses.sort_values('id').head(2).to_string())
+
 
     # Get the strongest structural targets (ignoring ID 0)
     target_counts = df_synapses[df_synapses['post_pt_root_id'] != 0].groupby('post_pt_root_id').size()
@@ -33,8 +58,85 @@ def get_downstream_synapses(
 
     # We return the raw IDs to Claude's context here so it can speak about them,
     # but we also return the ref_id for the visualizer.
-    return (f"Found strongest targets. IDs: {top_targets.index.tolist()}. "
-            f"Data stored for visualization at reference: {ref_id}")
+    #return (f"Found strongest targets. IDs: {top_targets.index.tolist()}. "
+    #        f"Data stored for visualization at reference: {ref_id}")
+
+
+    # 2. Sort by size (if available) and limit the count
+    # URLs have a maximum length, so we cannot send 5,000 synapses to the frontend.
+    if 'size' in df_synapses.columns:
+        df_synapses = df_synapses.sort_values('size', ascending=False)
+
+    synapse_subset = df_synapses.head(limit)
+
+
+    # 3. Build Neuroglancer Point Annotations
+    annotations = []
+    post_synaptic_targets = set()
+
+
+    for _, row in synapse_subset.iterrows():
+        # CAVE usually returns the coordinates as a single array: [x, y, z] in voxels
+        pos = row['ctr_pt_position']
+        pre_pos = row['pre_pt_position']
+        post_pos = row['post_pt_position']
+
+        post_synaptic_targets.add(str(row['post_pt_root_id']))      # Track the downstream neurons we are talking to
+
+        # FIXME - inherit voxel sizes from dataset automatically
+        pointAnno = PointAnnotation(
+            id=str(row['id']),                                # The unique synapse ID
+            point=pos,
+            #point=[int(pos[0]), int(pos[1])*4, int(pos[2])*40],    # Your coordinates
+            #point=[int(pos[i])*voxel_res[i] for i in range(3)],
+            description=f"Target: {row['post_pt_root_id']}"   # The text label (optional)
+        )
+        annotations.append(pointAnno)
+
+        lineAnno = LineAnnotation(
+            id=str(row['id']),
+            # Start inside the axon
+            pointA=[int(pre_pos[0]), int(pre_pos[1]), int(pre_pos[2])],
+            # End inside the dendrite
+            pointB=[int(post_pos[0]), int(post_pos[1]), int(post_pos[2])],
+            # Inject the synaptic weight into the UI hover label
+            description=f"Weight: {row['size']} | Target: {row['post_pt_root_id']}"
+        )
+        annotations.append(lineAnno)
+
+    print('getting viewer state')
+    em_source = cave_client.info.image_source()
+
+    print('getting seg_source')     # SLOW!!
+    seg_source = cave_client.info.segmentation_source()
+
+    viewer = (
+        statebuilder.ViewerState(dimensions=[1, 1, 1])
+        .add_image_layer(name='EM_Background', source=em_source)
+        .add_segmentation_layer(name='3D_Meshes', source=seg_source, segments=[neuron_root_id])
+        .add_annotation_layer(name='Output_Synapses', annotations=annotations, color='#ff0000')
+    )
+    scene_url = viewer.to_url(target_url='https://neuroglancer-demo.appspot.com/')
+    print(f'Got scene url : {scene_url}')
+
+
+
+    summary = (
+        f"Found {len(df_synapses)} total downstream synapses for {neuron_root_id}. "
+        f"I've mapped the top {limit} largest synapses to your view in red. "
+        f"This neuron connects to {len(post_synaptic_targets)} unique downstream targets in this sample."
+    )
+
+    return json.dumps({
+        "summary": summary,
+        "scene_url": scene_url
+    })
+
+
+
+
+
+
 
 
 @mcp_server.tool()

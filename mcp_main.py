@@ -1,6 +1,14 @@
 import os
 import warnings
 
+# import debugpy
+# debugpy.listen(5678)
+# debugpy.wait_for_client()
+
+import signal
+
+# make restarts during development a little faster
+# signal.signal(signal.SIGINT, lambda sig, frame: os._exit(0))
 
 # Suppress cloud-volume warnings
 os.environ['GCE_METADATA_TIMEOUT'] = '0.1'

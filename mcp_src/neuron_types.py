@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, List
 from pydantic import BaseModel, Field
 
 # ONE place to maintain codes AND descriptions
@@ -14,6 +14,11 @@ EXCITATORY_TYPES = {
 mtype_docs = "The excitatory cell type. Definitions:\n" + "\n".join(
     f"- {code}: {desc}" for code, desc in EXCITATORY_TYPES.items()
 )
+
+class SceneResult(BaseModel):
+    summary: str
+    scene_url: str
+
 
 # Use Literal for strict IDE typing, and inject the generated docs
 class PopulationSearchInput(BaseModel):

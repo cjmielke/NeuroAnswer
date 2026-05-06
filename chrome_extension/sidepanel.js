@@ -31,13 +31,10 @@ async function getCurrentCoordinates() {
     console.log("ngState is :");
     console.log(ngState);
 
-    // Fix 2: Handle both known Neuroglancer state schemas
-    if (ngState.position) {
-      // Modern schema (as seen in your log)
+    if (ngState.position) {           // Modern neuroglancer schema
       return ngState.position;
     } else if (ngState.navigation && ngState.navigation.pose && ngState.navigation.pose.position) {
-      // Legacy schema fallback
-      return ngState.navigation.pose.position.voxelCoordinates;
+      return ngState.navigation.pose.position.voxelCoordinates;         // Legacy schema fallback
     }
   } catch (e) {
     console.log("Coordinate extraction failed", e);
@@ -67,17 +64,23 @@ function appendMessage(sender, text, coords = null, isTemp = false) {
   chatHistory.scrollTop = chatHistory.scrollHeight; // Auto-scroll
 }
 
+
+async function updateNeuroglancerTab(newUrl) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) { // updates #! hash in url - tab doesn't reload, just changes scene
+    chrome.tabs.update(tab.id, { url: newUrl });
+  }
+}
+
 async function handleSend() {
   const text = chatInput.value.trim();
   if (!text) return;
 
-  // 1. Clear input and update UI
   chatInput.value = '';
   const coords = await getCurrentCoordinates();
   appendMessage('You', text, coords);
   appendMessage('Copilot', 'Processing...', null, true); // Loading state
 
-  // 2. Send to FastAPI Orchestrator
   try {
     const response = await fetch('http://127.0.0.1:8080/chat', {
       method: 'POST',
@@ -89,7 +92,30 @@ async function handleSend() {
 
     // Remove loading state and show result
     document.getElementById('temp-msg').remove();
-    appendMessage('Copilot', data.reply || "Error: No reply found in response.");
+
+    // 2. Append Claude's text reply
+    appendMessage('Copilot', data.reply || "Done.");
+
+    // 3. Inject Action Buttons for the Scenes
+    if (data.scene_urls && data.scene_urls.length > 0) {
+      const chatHistory = document.getElementById('chat-history');
+
+      data.scene_urls.forEach((url, index) => {
+        const btn = document.createElement('button');
+        btn.innerText = `🎯 Apply Scene ${index + 1}`;
+        btn.className = 'goto_scene_btn'
+        //btn.style.marginTop = '8px';
+        //btn.style.display = 'block';
+        //btn.style.width = '100%';
+        //btn.style.backgroundColor = '#4caf50'; // Make it pop a bit
+
+        // Bind the click to our tab-updater function
+        btn.onclick = () => updateNeuroglancerTab(url);
+
+        chatHistory.appendChild(btn);
+      });
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
 
   } catch (error) {
     document.getElementById('temp-msg').remove();

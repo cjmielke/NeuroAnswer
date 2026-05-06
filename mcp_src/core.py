@@ -1,3 +1,4 @@
+import os
 import uuid
 from mcp.server import FastMCP
 import time
@@ -7,7 +8,7 @@ import caveclient
 import pandas as pd
 
 
-mcp_server = FastMCP("NeuroAnswer", host="127.0.0.1", port=8000)
+mcp_server = FastMCP("NeuroAnswer", host=os.environ.get("MCP_HOST", "127.0.0.1"), port=8000)
 
 cave_client = caveclient.CAVEclient('minnie65_public')
 
@@ -53,7 +54,20 @@ class ConnectomeSession:
             print(f"  -> No local cache found for {table_name}. Downloading from CAVE...")
 
         # 2. If we reach here, we need to download it (assumes 'client' is in global scope)
-        df = cave_client.materialize.query_table(table_name)
+        df = cave_client.materialize.query_table(
+            table_name,
+            desired_resolution=[1, 1, 1],   # Forces download in true nanometers
+            split_positions=True            # Automatically unpacks into _x, _y, _z columns
+        )
+
+        if 'pt_position_x' not in df.columns and 'pt_position' in df.columns:
+            print("Unpacking spatial coordinates for optimized distance querying...")
+
+            # This is the fastest method to expand a column of lists into separate columns
+            df[['pt_position_x', 'pt_position_y', 'pt_position_z']] = pd.DataFrame(
+                df['pt_position'].tolist(),
+                index=df.index
+            )
 
         # 3. Save it to disk for next time
         df.to_parquet(file_path, engine='pyarrow', index=False)
