@@ -18,30 +18,14 @@ def get_downstream_synapses(
     Queries the structural graph for downstream targets of a specific cell ID.
     Returns a memory_reference_id to be passed to visualization tools.
     """
-    voxel_res = cave_client.info.viewer_resolution()
-    print(f'voxel resolution : {voxel_res}')
-    df_synapses = cave_client.materialize.query_table(
-        'synapses_pni_2',
-        filter_equal_dict={'pre_pt_root_id': neuron_root_id},
-        #desired_resolution=[1, 1, 1]
-        desired_resolution=voxel_res.tolist()
-    )
-    if df_synapses.empty:
-        return json.dumps({"summary": f"No outgoing synapses found for {neuron_root_id}."})
-    print(f'Got {len(df_synapses)} rows from pre_pt_root_id')
-    print(df_synapses.sort_values('id').head(2).to_string())
-
-
     df_synapses = cave_client.materialize.query_table(
         'synapses_pni_2',
         filter_equal_dict={'pre_pt_root_id': neuron_root_id},
         desired_resolution=[1, 1, 1]
-        #desired_resolution=voxel_res.tolist()
     )
     if df_synapses.empty:
         return json.dumps({"summary": f"No outgoing synapses found for {neuron_root_id}."})
     print(f'Got {len(df_synapses)} rows from pre_pt_root_id')
-    print(df_synapses.sort_values('id').head(2).to_string())
 
 
     # Get the strongest structural targets (ignoring ID 0)
@@ -104,22 +88,14 @@ def get_downstream_synapses(
         )
         annotations.append(lineAnno)
 
-    print('getting viewer state')
-    em_source = cave_client.info.image_source()
-
-    print('getting seg_source')     # SLOW!!
     seg_source = cave_client.info.segmentation_source()
 
     viewer = (
         statebuilder.ViewerState(dimensions=[1, 1, 1])
-        .add_image_layer(name='EM_Background', source=em_source)
         .add_segmentation_layer(name='3D_Meshes', source=seg_source, segments=[neuron_root_id])
         .add_annotation_layer(name='Output_Synapses', annotations=annotations, color='#ff0000')
     )
-    scene_url = viewer.to_url(target_url='https://neuroglancer-demo.appspot.com/')
-    print(f'Got scene url : {scene_url}')
-
-
+    state = viewer.to_dict()
 
     summary = (
         f"Found {len(df_synapses)} total downstream synapses for {neuron_root_id}. "
@@ -129,7 +105,8 @@ def get_downstream_synapses(
 
     return json.dumps({
         "summary": summary,
-        "scene_url": scene_url
+        "layers": state.get("layers", []),
+        "suggested_position": state.get("position"),
     })
 
 

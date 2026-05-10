@@ -31,14 +31,15 @@
     <h3>Neuroglancer Not Found</h3>
     <p>Please navigate to a Neuroglancer tab.</p>
     <button id="refresh-btn">Check Again</button>
+    <hr style="border-color: #444; margin: 12px 0;">
+    <p style="color: #888; font-size: 0.85em;">Or open a supported dataset:</p>
+    <div id="scene-menu"></div>
   </div>
 
   <div id="app-state">
     <h3>Neuro Copilot</h3>
 
-    <div id="chat-history">
-      <div class="msg msg-bot"><strong>System:</strong> Ready. Connected to FastMCP backend.</div>
-    </div>
+    <div id="chat-history"></div>
 
     <div class="input-row">
       <input type="text" id="chat-input" placeholder="Query the connectome...">

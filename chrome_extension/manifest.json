@@ -9,6 +9,13 @@
     "activeTab",
     "scripting"
   ],
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_title": "Open Neuro Copilot",
     "default_icon": {

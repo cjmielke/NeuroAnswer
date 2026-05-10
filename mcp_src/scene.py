@@ -11,29 +11,16 @@ import urllib.parse
 # FIXME - could make more sense to just call this as a function in all query tools, and return scene for each
 
 def build_scene_from_neuron_selection(results_df, x, y, z):
+    found_root_ids = [str(int(row['pt_root_id'])) for _, row in results_df.iterrows()]
 
-    found_root_ids = []
-    for _, row in results_df.iterrows():
-        print(row)
-        root_id = str(int(row['pt_root_id']))
-        found_root_ids.append(root_id)
+    seg_source = cave_client.info.segmentation_source()
 
-    client = caveclient.CAVEclient('minnie65_public')
-
-    print('getting em_source')
-    em_source = client.info.image_source()
-    print('getting seg_source')
-    seg_source = client.info.segmentation_source()
-
-    print('getting viewer state')
     viewer = (
-        statebuilder.ViewerState()
-        .add_image_layer(name='EM_Background', source=em_source)
+        statebuilder.ViewerState(dimensions=[1, 1, 1])
         .add_segmentation_layer(name='3D_Meshes', source=seg_source, segments=found_root_ids)
     )
-    scene_url = viewer.to_url(target_url='https://neuroglancer-demo.appspot.com/')
-
-    return scene_url
+    state = viewer.to_dict()
+    return {"layers": state.get("layers", []), "suggested_position": state.get("position")}
 
 #@mcp_server.tool()
 def build_scene_from_memory(memory_reference_id: str) -> SceneResult:

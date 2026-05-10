@@ -10,25 +10,36 @@ import pandas as pd
 from mcp_src.scene import build_scene_from_neuron_selection
 
 
+# TODO - How to allow claude to pass in pandas query strings, opening many doors for flexible queries!
+#@mcp_server.tool()
+def query_cells(expression: str, limit: int = 10) -> str:
+    """
+    Filter the excitatory cell table with a pandas query expression.
+    Columns: pt_root_id, cell_type, pt_position_x, pt_position_y, pt_position_z (all in nm)
+    Examples:
+      "cell_type == 'L4a'"
+      "pt_position_z > 800000 and cell_type.str.startswith('L5')"
+    Returns matching cells for visualization.
+    """
+    results = session.excitatory_cache.query(expression).head(limit)
+
+
 @mcp_server.tool()
 def search_cells_in_view(x: float, y: float, z: float, radius_nm: float = 15000.0) -> str:
     """
     Finds excitatory cells within a specific radius of the user's current 3D coordinates.
-    Input coordinates MUST be raw Neuroglancer voxels. The tool handles the nm conversion.
+    x, y, z must be in nanometers exactly as given in SYSTEM CONTEXT — do NOT convert them.
     """
-    # 1. Access your loaded dataframe (adjust the variable name to match your code)
-    # Assuming it's something like session.excitatory_cache
     df = session.excitatory_cache
 
     if df is None or df.empty:
         return json.dumps({"summary": "Error: Local connectome dataframe is not loaded."})
 
-    voxel_res = cave_client.info.viewer_resolution()
-    # Calculate distance in true nanometers using dynamic scaling
+    # All positions (cell table and input) are in nm — plain Euclidean distance
     distances = np.sqrt(
-        ((df['pt_position_x'] - x) * voxel_res[0]) ** 2 +
-        ((df['pt_position_y'] - y) * voxel_res[1]) ** 2 +
-        ((df['pt_position_z'] - z) * voxel_res[2]) ** 2
+        (df['pt_position_x'] - x) ** 2 +
+        (df['pt_position_y'] - y) ** 2 +
+        (df['pt_position_z'] - z) ** 2
     )
 
     # 4. Filter and sort
@@ -54,8 +65,8 @@ def search_cells_in_view(x: float, y: float, z: float, radius_nm: float = 15000.
         # Adjust 'pt_root_id' and 'cell_type' to match your dataframe columns
         response += f"| {row['pt_root_id']} | {row['cell_type']} | {row['distance_nm']:.1f} |\n"
 
-    scene_url = build_scene_from_neuron_selection(results, x, y, z)
-    return json.dumps(dict(summary=response, scene_url=scene_url))
+    scene_data = build_scene_from_neuron_selection(results, x, y, z)
+    return json.dumps({"summary": response, "layers": scene_data["layers"], "suggested_position": scene_data.get("suggested_position")})
 
 
 
