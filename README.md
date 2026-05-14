@@ -86,3 +86,10 @@ You'll need to install the Google Chrome extension for the fun part. Its not in 
 ## Feedback
 
 This project is under active development. If you work in connectomics or neuroscience and have thoughts on what queries or workflows would be most useful in a natural language interface for Neuroglancer, please open an issue or reach out. The goal is to build something the field actually wants to use.
+
+
+## Brainsplosion
+
+Take a minute to reflect on the fact that, by using this tool, your biological neurons are creating language which informs a large set of in-silico neurons to create language that queries a database for information on a mouses biological neurons.
+
+"We are a way for the universe to know itself" - Carl Sagan
