@@ -18,12 +18,14 @@ console = Console()
 from anthropic import Anthropic, AsyncAnthropic
 
 # --- LANGFUSE (optional) ---
-
-from langfuse import get_client
 _lf_pub = os.environ.get("LANGFUSE_PUBLIC_KEY")
 _lf_sec = os.environ.get("LANGFUSE_SECRET_KEY")
-# Use the new get_client() approach
-langfuse_client = get_client() if (_lf_pub and _lf_sec) else None
+langfuse_client = None
+
+if (_lf_pub and _lf_sec) :
+    from langfuse import get_client
+    langfuse_client = get_client()
+
 if langfuse_client:
     print("✅ Langfuse tracing enabled")
 

@@ -65,8 +65,8 @@ To query the structural brain graph, you need a CAVE API token, along with your 
    CAVE_TOKEN=your_copied_cave_token_here
    LANGFUSE_PUBLIC_KEY=optional_telemetry_key
 
-Note, this repository uses "LangFuse" to log user interactions with the chat, to help find friction points and to improve the system overall. 
-This is entirely opt-in - if you don't mind your chats being shared, uncomment the LANGFUSE_PUBLIC_KEY 
+Note, I'm using "LangFuse" to log my chats during development. If you want to do the same, you can
+sign up for a free account, create API keys, and also place them in the .env file. 
 
 With the credentials set up, the servers can be stood up using docker 
 ```bash
