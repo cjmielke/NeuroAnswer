@@ -50,19 +50,28 @@ Python · FastMCP · CAVEclient · nglui · FastAPI · Chrome Extensions API
 
 ## Installation
 
-### Server setup
+### 🔑 Server Setup & Data Access
 
-Clone the repository, configure the .env file, and stand up the MCP and API servers with docker
+To query the structural brain graph, you need a CAVE API token, along with your Anthropic API key.
+
+1. Copy the environment template:
+   `cp .env.example .env`
+2. Go to the [DAF API Auth Portal](https://global.daf-apis.com/auth/api/v1/create_token). You may find this [additional documentation](https://tutorial.microns-explorer.org/quickstart_notebooks/01-caveclient-setup.html) useful.
+3. Log in with your Google account.
+4. Copy the generated token string.
+5. Open your new `.env` file and paste your credentials:
+   ```env
+   ANTHROPIC_API_KEY=your_claude_key_here
+   CAVE_TOKEN=your_copied_cave_token_here
+   LANGFUSE_PUBLIC_KEY=optional_telemetry_key
+
+Note, this repository uses "LangFuse" to log user interactions with the chat, to help find friction points and to improve the system overall. 
+This is entirely opt-in - if you don't mind your chats being shared, uncomment the LANGFUSE_PUBLIC_KEY 
+
+With the credentials set up, the servers can be stood up using docker 
 ```bash
-git clone https://github.com/cjmielke/NeuroAnswer
-mv .env.example .env
-nano .env     # set your Claude API key, or it wont work
 docker compose up
 ```
-
-For access to the connectivity data, you will need to sign up for the global Data Annotation Framework (DAF). 
-[The registration link is here](https://tutorial.microns-explorer.org/quickstart_notebooks/01-caveclient-setup.html) - 
-and you may find this [additional documentation](https://tutorial.microns-explorer.org/quickstart_notebooks/01-caveclient-setup.html) useful.
 
 ### Frontend setup
 
