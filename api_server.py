@@ -20,15 +20,13 @@ from anthropic import Anthropic, AsyncAnthropic
 # --- LANGFUSE (optional) ---
 _lf_pub = os.environ.get("LANGFUSE_PUBLIC_KEY")
 _lf_sec = os.environ.get("LANGFUSE_SECRET_KEY")
-langfuse_client = None
 
-if (_lf_pub and _lf_sec) :
+if _lf_pub and _lf_sec:
     from langfuse import get_client
     langfuse_client = get_client()
-
-if langfuse_client:
     print("✅ Langfuse tracing enabled")
-
+else:
+    langfuse_client = None
 
 
 def get_latest_model(family_prefix: str = "claude-sonnet") -> str:
