@@ -1,6 +1,8 @@
 import os
 import json
 import time
+from dotenv import load_dotenv
+load_dotenv()
 
 import caveclient
 from fastapi import FastAPI
@@ -13,8 +15,19 @@ from mcp.client.sse import sse_client
 from rich.console import Console
 console = Console()
 
-
 from anthropic import Anthropic, AsyncAnthropic
+
+# --- LANGFUSE (optional) ---
+
+from langfuse import get_client
+_lf_pub = os.environ.get("LANGFUSE_PUBLIC_KEY")
+_lf_sec = os.environ.get("LANGFUSE_SECRET_KEY")
+# Use the new get_client() approach
+langfuse_client = get_client() if (_lf_pub and _lf_sec) else None
+if langfuse_client:
+    print("✅ Langfuse tracing enabled")
+
+
 
 def get_latest_model(family_prefix: str = "claude-sonnet") -> str:
     client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -84,6 +97,11 @@ class ExtensionRequest(BaseModel):
 async def handle_chat(request: ExtensionRequest):
     """The main endpoint the Chrome Extension hits."""
 
+    trace = langfuse_client.start_observation(
+        name="chat",
+        input={"prompt": request.prompt}
+    ) if langfuse_client else None
+
     contextual_prompt = request.prompt
     if request.ng_state:
         state = request.ng_state
@@ -125,8 +143,17 @@ async def handle_chat(request: ExtensionRequest):
             # Accumulate layers by name across tool calls (last write wins per name)
             scene_layers: dict = {}
             suggested_position = None
+            blocks: list = []  # ordered {type, content} blocks for the frontend
+            turn = 0
 
             while True:
+                generation = trace.start_observation(
+                    name=f"claude-turn-{turn}",
+                    as_type="generation",
+                    model=CLAUDE_MODEL,
+                    input=conversation_history,
+                ) if trace else None
+
                 response = await anthropic_client.messages.create(
                     model=CLAUDE_MODEL,
                     max_tokens=2000,
@@ -134,7 +161,16 @@ async def handle_chat(request: ExtensionRequest):
                     tools=anthropic_tools
                 )
 
+                # Update generation completion:
+                if generation:
+                    generation.update(
+                        output=[b.text if b.type == "text" else b.model_dump() for b in response.content],
+                        usage_details={"input": response.usage.input_tokens, "output": response.usage.output_tokens},
+                    )
+                    generation.end()
+
                 conversation_history.append({"role": "assistant", "content": response.content})
+                turn += 1
 
                 if response.stop_reason == "tool_use":
                     for content_block in response.content:
@@ -142,8 +178,30 @@ async def handle_chat(request: ExtensionRequest):
                             console.print(f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
                             console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
 
+                            tool_span = trace.start_observation(
+                                name=content_block.name,
+                                as_type="span",
+                                input=content_block.input,
+                            ) if trace else None
+
                             result = await mcp.call_tool(content_block.name, content_block.input)
-                            raw_text = result.content[0].text
+
+                            # Split content blocks by type into typed frontend blocks
+                            tool_blocks = []
+                            for item in result.content:
+                                if item.type == "text":
+                                    tool_blocks.append({"type": "text", "content": item.text})
+                                elif item.type == "image":
+                                    tool_blocks.append({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"})
+                            blocks.extend(tool_blocks)
+
+                            # Text-only view: fed back to Claude and used for JSON parsing
+                            raw_text = "\n\n".join(b["content"] for b in tool_blocks if b["type"] == "text")
+
+                            # Update tool span completion:
+                            if tool_span:
+                                tool_span.update(output=raw_text[:2000])
+                                tool_span.end()
 
                             short_result = raw_text[:300] + "..." if len(raw_text) > 300 else raw_text
                             console.print(f"[green]📤 Result:[/green] {short_result}\n")
@@ -174,8 +232,15 @@ async def handle_chat(request: ExtensionRequest):
                         (block.text for block in response.content if block.type == "text"),
                         "Done."
                     )
+                    if trace:
+                        trace.update(output={"reply": final_text})
+                        trace.end()
+                    if langfuse_client:
+                        langfuse_client.flush()
+
+                    blocks.append({"type": "text", "content": final_text})
                     return {
-                        "reply": final_text,
+                        "blocks": blocks,
                         "layers": list(scene_layers.values()),
                         "suggested_position": suggested_position,
                     }

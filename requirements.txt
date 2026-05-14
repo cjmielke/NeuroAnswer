@@ -9,3 +9,5 @@ nglui
 pandas
 pydantic
 uvicorn
+rich
+matplotlib

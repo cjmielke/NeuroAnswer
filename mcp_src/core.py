@@ -28,6 +28,8 @@ class ConnectomeSession:
         print("Booting NeuroAnswer... Loading Structural Metadata.")
 
         # Load the flagship Excitatory and Inhibitory tables
+        # FIXME - these names are wrong, fundamentally. First table has excitatory and inhibitory
+        # TODO - better understand the underlying schema
         self.excitatory_cache = self._load_or_fetch_table('aibs_metamodel_mtypes_v661_v2')
         self.inhibitory_cache = self._load_or_fetch_table('aibs_metamodel_celltypes_v661')
 

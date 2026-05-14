@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 from mcp_src.core import mcp_server
-from mcp_src import neurons, synapses, scene
+from mcp_src import neurons, synapses, scene, analysis
 
 
 if __name__ == "__main__":

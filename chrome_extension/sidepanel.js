@@ -171,6 +171,9 @@ document.getElementById('refresh-btn')?.addEventListener('click', () => {
   boundTabId = null;
   boundState = null;
   document.getElementById('scene-menu').innerHTML = '';
+  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    if (tab) chrome.tabs.sendMessage(tab.id, { type: 'request_state' }, () => void chrome.runtime.lastError);
+  });
   onPanelInit();
 });
 
@@ -222,15 +225,17 @@ async function handleSend() {
     const data = await response.json();
     document.getElementById('temp-msg').remove();
 
-    appendMessage('Copilot', data.reply || 'Done.');
-
-    if (data.image_b64) {
-      const img = document.createElement('img');
-      img.src = data.image_b64;
-      img.style.cssText = 'max-width:100%; margin-top:8px; border-radius:4px;';
-      chatHistory.appendChild(img);
+    for (const block of (data.blocks || [{type: 'text', content: 'Done.'}])) {
+      if (block.type === 'text') {
+        appendMessage('Copilot', block.content);
+      } else if (block.type === 'image') {
+        const img = document.createElement('img');
+        img.src = block.content;
+        img.style.cssText = 'max-width:100%; margin-top:8px; border-radius:4px;';
+        chatHistory.appendChild(img);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      }
     }
-
 
     // Auto-apply layers (upsert into current scene)
     if (data.layers && data.layers.length > 0) {
