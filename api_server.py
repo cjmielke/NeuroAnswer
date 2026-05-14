@@ -186,19 +186,17 @@ async def handle_chat(request: ExtensionRequest):
 
                             result = await mcp.call_tool(content_block.name, content_block.input)
 
-                            # Split content blocks by type into typed frontend blocks
-                            tool_blocks = []
+                            # Images pass through directly; text blocks are processed below
+                            image_blocks = []
+                            raw_text_parts = []
                             for item in result.content:
                                 if item.type == "text":
-                                    tool_blocks.append({"type": "text", "content": item.text})
+                                    raw_text_parts.append(item.text)
                                 elif item.type == "image":
-                                    tool_blocks.append({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"})
-                            blocks.extend(tool_blocks)
+                                    image_blocks.append({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"})
 
-                            # Text-only view: fed back to Claude and used for JSON parsing
-                            raw_text = "\n\n".join(b["content"] for b in tool_blocks if b["type"] == "text")
+                            raw_text = "\n\n".join(raw_text_parts)
 
-                            # Update tool span completion:
                             if tool_span:
                                 tool_span.update(output=raw_text[:2000])
                                 tool_span.end()
@@ -206,6 +204,7 @@ async def handle_chat(request: ExtensionRequest):
                             short_result = raw_text[:300] + "..." if len(raw_text) > 300 else raw_text
                             console.print(f"[green]📤 Result:[/green] {short_result}\n")
 
+                            # If the text is a structured dict, extract layers/position and use summary for display
                             try:
                                 tool_data = json.loads(raw_text)
                                 for layer in tool_data.get("layers", []):
@@ -214,8 +213,14 @@ async def handle_chat(request: ExtensionRequest):
                                 if tool_data.get("suggested_position") is not None:
                                     suggested_position = tool_data["suggested_position"]
                                 clean_result = tool_data.get("summary", raw_text)
+                                display_text = clean_result
                             except json.JSONDecodeError:
                                 clean_result = raw_text
+                                display_text = raw_text
+
+                            if display_text:
+                                blocks.append({"type": "text", "content": display_text})
+                            blocks.extend(image_blocks)
 
                             conversation_history.append({
                                 "role": "user",

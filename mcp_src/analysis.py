@@ -1,7 +1,7 @@
 import base64
 import io
-from typing import List, Dict
-from mcp.server.fastmcp import Image as MCPImage
+from typing import List
+from mcp.types import TextContent, ImageContent
 from matplotlib import pyplot as plt
 
 
@@ -37,7 +37,7 @@ def downstream_synapes(neuron_root_id: int, limit=None):
 
 
 @mcp_server.tool()
-def execute_analysis(code: str) -> List:
+def execute_analysis(code: str) -> List[TextContent | ImageContent]:
     """
     This tool allows more complex on the connectome data by using generated python code
 
@@ -72,16 +72,16 @@ def execute_analysis(code: str) -> List:
     def display(content):
         """Internal helper injected into the sandbox."""
         if isinstance(content, str):
-            report_blocks.append(content)
+            report_blocks.append(TextContent(type="text", text=content))
         elif hasattr(content, "savefig"):  # Handle Matplotlib Figures
             buf = io.BytesIO()
             content.savefig(buf, format="png", bbox_inches='tight')
             plt.close(content)
-            report_blocks.append(MCPImage(data=buf.getvalue(), format="png"))
+            report_blocks.append(ImageContent(type="image", data=base64.b64encode(buf.getvalue()).decode(), mimeType="image/png"))
         elif isinstance(content, PILImage.Image):  # Handle PIL Images
             buf = io.BytesIO()
             content.save(buf, format="PNG")
-            report_blocks.append(MCPImage(data=buf.getvalue(), format="png"))
+            report_blocks.append(ImageContent(type="image", data=base64.b64encode(buf.getvalue()).decode(), mimeType="image/png"))
 
     namespace = {
         'neurons_df': session.excitatory_cache,

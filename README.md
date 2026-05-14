@@ -11,6 +11,13 @@ NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) co
 **Current capabilities:**
 - Spatial queries: find neurons by cell type within the current Neuroglancer viewport
 - Synapse tracing: retrieve downstream synaptic targets for any neuron and render pre/post-synaptic markers
+- **Code execution sandbox**: allowing Claude to run generated Python (pandas, numpy, matplotlib) workflows against the MICrONs dataset and render scientific figures in the browser
+
+### Code execution sandbox
+
+Ive created an MCP tool that allows Claude to generate and execute python against pre-loaded dataframes, allowing generic scientific queries. Scientific figures render directly in the chat window!
+
+![histogram](img/histogram.png)
 
 **Coming soon!:**
 - Compartment targeting: identify synapses by postsynaptic compartment (soma, shaft, spine)
@@ -18,7 +25,6 @@ NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) co
 
 ## In development
 
-- **Code execution sandbox**: allowing Claude to run generated Python (pandas, numpy, matplotlib) workflows against the MICrONs dataset and render scientific figures in the browser
 - **Richer annotation support**: line annotations connecting pre- and post-synaptic sites with size/weight labels
 
 ## Future directions
