@@ -11,3 +11,4 @@ pydantic
 uvicorn
 rich
 matplotlib
+langfuse
