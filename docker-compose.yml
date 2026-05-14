@@ -1,0 +1,20 @@
+services:
+  mcp:
+    build: .
+    command: python mcp_main.py
+    environment:
+      - MCP_HOST=0.0.0.0
+    volumes:
+      - ~/.cloudvolume:/root/.cloudvolume:ro
+      - ./data:/app/data
+
+  api:
+    build: .
+    command: python api_server.py
+    ports:
+      - "8080:8080"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MCP_SERVER_URL=http://mcp:8000/sse
+    depends_on:
+      - mcp
