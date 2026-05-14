@@ -19,12 +19,11 @@ Ive created an MCP tool that allows Claude to generate and execute python agains
 
 ![histogram](img/histogram.png)
 
-**Coming soon!:**
-- Compartment targeting: identify synapses by postsynaptic compartment (soma, shaft, spine)
-- Population search: look up excitatory and inhibitory neuron populations by morphological type
 
 ## In development
 
+- Compartment targeting: identify synapses by postsynaptic compartment (soma, shaft, spine)
+- Population search: look up excitatory and inhibitory neuron populations by morphological type
 - **Richer annotation support**: line annotations connecting pre- and post-synaptic sites with size/weight labels
 
 ## Future directions
