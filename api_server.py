@@ -298,7 +298,7 @@ async def get_new_scene(dataset_id: str):
         return {"error": f"Unknown dataset: {dataset_id}"}
     ds = KNOWN_DATASETS[dataset_id]
     start = time.time()
-    client = caveclient.CAVEclient(ds["cave_dataset"])
+    client = caveclient.CAVEclient(ds["cave_dataset"], auth_token=os.environ['CAVE_TOKEN'])
     print(f'took {time.time()-start} seconds to init caveclient')
     start = time.time()
     em_source = client.info.image_source()

@@ -10,7 +10,7 @@ import pandas as pd
 
 mcp_server = FastMCP("NeuroAnswer", host=os.environ.get("MCP_HOST", "127.0.0.1"), port=8000)
 
-cave_client = caveclient.CAVEclient('minnie65_public')
+cave_client = caveclient.CAVEclient('minnie65_public', auth_token=os.environ['CAVE_TOKEN'])
 
 class ConnectomeSession:
     """Manages the in-memory state so Claude doesn't crash on massive datasets."""
