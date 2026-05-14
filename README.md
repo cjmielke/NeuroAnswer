@@ -17,6 +17,8 @@ NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) co
 
 Ive created an MCP tool that allows Claude to generate and execute python against pre-loaded dataframes, allowing generic scientific queries. Scientific figures render directly in the chat window!
 
+![histogram](img/pie.png)
+
 ![histogram](img/histogram.png)
 
 
