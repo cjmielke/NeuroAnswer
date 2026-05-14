@@ -16,6 +16,17 @@ NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) co
 - Compartment targeting: identify synapses by postsynaptic compartment (soma, shaft, spine)
 - Population search: look up excitatory and inhibitory neuron populations by morphological type
 
+## In development
+
+- **Code execution sandbox**: allowing Claude to run generated Python (pandas, numpy, matplotlib) workflows against the MICrONs dataset and render scientific figures in the browser
+- **Richer annotation support**: line annotations connecting pre- and post-synaptic sites with size/weight labels
+
+## Future directions
+
+- **Dataset generalization**: extending support to FlyWire, H01 (human cortex), and other connectomics datasets with different database schemas
+- **Simplified architecture**: moving the full agent loop into the Chrome extension to eliminate the FastAPI relay
+- **Community-driven tool design**: the tool vocabulary should be shaped by what researchers actually need — feedback on useful queries and workflows is very welcome
+
 ## Architecture
 
 ```
@@ -32,20 +43,36 @@ The MCP server exposes domain-specific tools — spatial search, synapse queries
 
 Neuron metadata is cached locally as Parquet files to keep spatial queries fast. Synapse data is fetched live from CAVE on demand - a bit slower, but I'm working on it!
 
-## In development
-
-- **Code execution sandbox**: allowing Claude to run generated Python (pandas, numpy, matplotlib) workflows against the MICrONs dataset and render scientific figures in the browser
-- **Richer annotation support**: line annotations connecting pre- and post-synaptic sites with size/weight labels
-
-## Future directions
-
-- **Dataset generalization**: extending support to FlyWire, H01 (human cortex), and other connectomics datasets with different database schemas
-- **Simplified architecture**: moving the full agent loop into the Chrome extension to eliminate the FastAPI relay
-- **Community-driven tool design**: the tool vocabulary should be shaped by what researchers actually need — feedback on useful queries and workflows is very welcome
 
 ## Built with
 
 Python · FastMCP · CAVEclient · nglui · FastAPI · Chrome Extensions API
+
+## Installation
+
+### Server setup
+
+Clone the repository, configure the .env file, and stand up the MCP and API servers with docker
+```bash
+git clone https://github.com/cjmielke/NeuroAnswer
+mv .env.example .env
+nano .env     # set your Claude API key, or it wont work
+docker compose up
+```
+
+For access to the connectivity data, you will need to sign up for the global Data Annotation Framework (DAF). 
+[The registration link is here](https://tutorial.microns-explorer.org/quickstart_notebooks/01-caveclient-setup.html) - 
+and you may find this [additional documentation](https://tutorial.microns-explorer.org/quickstart_notebooks/01-caveclient-setup.html) useful.
+
+### Frontend setup
+
+You can theoretically use the MCP server without NeuroGlancer, but it won't be fun. Science should be fun!
+You'll need to install the Google Chrome extension for the fun part. Its not in the chrome extension store, but you can install it locally.
+
+- In Google Chrome, type `chrome://extensions` in the URL bar and hit enter
+- Enable `developer mode` with the toggle button
+- Click `Load unpacked` and then navigate to the `chrome_extension` directory in this cloned repository
+- When you open the extension, it will inform you if it doesn't see a NeuroGlancer tab, but it will list available datasets
 
 ## Feedback
 
