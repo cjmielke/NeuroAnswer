@@ -1,21 +1,48 @@
 import base64
 import io
+import sys
 from typing import List
 from mcp.types import TextContent, ImageContent
 from matplotlib import pyplot as plt
-
+plt.rcParams['svg.fonttype'] = 'none'       # dont allow fonts to be exported as SVG paths
 
 from mcp_src.core import mcp_server, cave_client, session
 import pandas as pd
 import numpy as np
 from PIL import Image as PILImage
 
+from loguru import logger
+logger.remove()
+logger.add(sys.stderr, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <white>{message}</white>")
+
+SVG_SIZE_LIMIT = 500 * 1024  # 500 KB — above this, scatter-heavy plots are cheaper as PNG
+
+
+def fig_to_image_content(fig) -> ImageContent:
+    """Render a matplotlib figure as SVG if small enough, PNG otherwise."""
+    svg_buf = io.BytesIO()
+    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
+    svg_bytes = svg_buf.getvalue()
+
+    # --- LOG THE ACTUAL SIZE ---
+    size_kb = len(svg_bytes) / 1024
+    logger.debug(f"Generated SVG size: {size_kb:.2f} KB")
+
+    if len(svg_bytes) <= SVG_SIZE_LIMIT:
+        logger.info("Size is under limit. Returning SVG.")
+        plt.close(fig)
+        return ImageContent(type="image", data=base64.b64encode(svg_bytes).decode(), mimeType="image/svg+xml")
+
+    logger.warning(f"SVG size ({size_kb:.2f} KB) exceeded {SVG_SIZE_LIMIT / 1024} KB limit! Falling back to PNG.")
+    png_buf = io.BytesIO()
+    fig.savefig(png_buf, format='png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    return ImageContent(type="image", data=base64.b64encode(png_buf.getvalue()).decode(), mimeType="image/png")
+
 
 def fig_to_b64(fig) -> str:
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight')
-    plt.close(fig)
-    return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+    ic = fig_to_image_content(fig)
+    return f'data:{ic.mimeType};base64,{ic.data}'
 
 # TODO -
 def downstream_synapes(neuron_root_id: int, limit=None):
@@ -57,15 +84,12 @@ def execute_analysis(code: str) -> List[TextContent | ImageContent]:
                 - pre_pt_root_id:  id of source neuron
                 - post_pt_root_id: id of destination neuron
 
-        display(content): Use this to add content to your final report.
+        display(content): Use this to add content to your final report. Call this multiple times to interleave text and charts (e.g., text, fig1, text, fig2).
             - If you pass a string, it adds a markdown text block.
-            - If you pass a PIL Image or a Matplotlib Figure, it adds an image block.
-            - Call this multiple times to interleave text and charts (e.g., text, fig1, text, fig2).
+            - If you pass a Matplotlib Figure, the browser UI will receive an SVG (preferred for most plot types)
+            - When creating plots with more than 1,000 points, use rasterized=True in your plot call (e.g., plt.scatter(x, y, rasterized=True)). This prevents SVG bloat.
+            - If you pass a PIL Image, the browser UI will render a PNG
 
-    Results :
-        Place all results from your analysis in the following variables:
-        summary: str, a textual summary of the analysis results. Preferrably in markdown format
-        images: List[Image]     a list of PIL Image objects. This is were results from matplotlib can be placed
     """
 
     report_blocks = []
@@ -74,10 +98,7 @@ def execute_analysis(code: str) -> List[TextContent | ImageContent]:
         if isinstance(content, str):
             report_blocks.append(TextContent(type="text", text=content))
         elif hasattr(content, "savefig"):  # Handle Matplotlib Figures
-            buf = io.BytesIO()
-            content.savefig(buf, format="png", bbox_inches='tight')
-            plt.close(content)
-            report_blocks.append(ImageContent(type="image", data=base64.b64encode(buf.getvalue()).decode(), mimeType="image/png"))
+            report_blocks.append(fig_to_image_content(content))
         elif isinstance(content, PILImage.Image):  # Handle PIL Images
             buf = io.BytesIO()
             content.save(buf, format="PNG")
