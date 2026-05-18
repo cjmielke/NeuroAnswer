@@ -13,3 +13,6 @@ rich
 matplotlib
 langfuse
 tabulate
+loguru
+
+
