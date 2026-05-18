@@ -18,18 +18,25 @@ NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) co
 Ive created an MCP tool that allows Claude to generate and execute python against pre-loaded dataframes, allowing generic scientific queries. Scientific figures render directly in the chat window!
 
 For example, the prompt
-```text
-Show me the 10 closest neurons in this field of view. Then for each of those neurons, query the API to find their downstream neurons. For that pooled set of synapses, render a horizontal violin plot showing the distributions of synapse size by the mtype of the downstream neuron
-```
+
+> Show me the 10 closest neurons in this field of view. Then for each of those neurons, query the API to find their downstream neurons. For that pooled set of synapses, render a horizontal violin plot showing the distributions of synapse size by the mtype of the downstream neuron
+
 Produced the following analysis
+
+> Downstream Synapse Pool
+> 3,049 total synapses were fetched across all 10 neurons. After joining to the cell type table and filtering for m-types with ≥10 synapses, 17 distinct downstream m-types were visualized.
+> #### Key Observations from the Violin Plot
+> - L5ET neurons are the single most common downstream target (n=647), reflecting the dense recurrent connectivity among deep-layer excitatory cells in this region.
+> - PTC and DTC neurons also receive heavy input (n=300 and n=245), suggesting these projection-class cells are major hubs in this local circuit.
+> - The size distributions are right-skewed across all m-types, with most synapses being small but a long tail of large synapses — consistent with the known lognormal synapse size distribution in cortex.
+> - White bars on each violin represent the IQR (Q1–Q3), and the white tick marks the median. The ordering from bottom to top reflects increasing median synapse size.
+> - 464 synapses (~15%) hit neurons not in the cell-type table and were excluded as "Unknown".
 
 ![a violin plot showing the distribution of synapse sizes for each neuronal m-type](img/synapse_size_mtype.png)
 
-#### More examples
+## More examples
 
 ![pie chart showing downstream neuron class](img/pie.png)
-
-![histogram of synapse sizes](img/histogram.png)
 
 ![distribution of target neuron cell types](img/distribution.png)
 
@@ -39,7 +46,7 @@ Produced the following analysis
 - Population search: look up excitatory and inhibitory neuron populations by morphological type
 - **Richer annotation support**: line annotations connecting pre- and post-synaptic sites with size/weight labels
 
-## Future directions
+#### Future directions
 
 - **Dataset generalization**: extending support to FlyWire, H01 (human cortex), and other connectomics datasets with different database schemas
 - **Simplified architecture**: moving the full agent loop into the Chrome extension to eliminate the FastAPI relay
