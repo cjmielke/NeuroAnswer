@@ -12,3 +12,4 @@ uvicorn
 rich
 matplotlib
 langfuse
+tabulate
