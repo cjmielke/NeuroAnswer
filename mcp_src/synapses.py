@@ -12,7 +12,8 @@ import json
 @mcp_server.tool()
 def get_downstream_synapses(
     neuron_root_id: int = Field(..., description="MUST be a 64-bit integer ID from the neuron_root_ids list. Do NOT pass a memory_reference_id here."),
-    limit: int = 5
+    limit: int = 5,
+    layer_name: str = Field('Output_Synapses', description="The layer name, shown in the neuroglancer view. You can use this to provide a custom concise name related to the input query")
 ) -> str:
     """
     Queries the structural graph for downstream targets of a specific cell ID.
@@ -93,7 +94,7 @@ def get_downstream_synapses(
     viewer = (
         statebuilder.ViewerState(dimensions=[1, 1, 1])
         .add_segmentation_layer(name='3D_Meshes', source=seg_source, segments=[neuron_root_id])
-        .add_annotation_layer(name='Output_Synapses', annotations=annotations, color='#ff0000')
+        .add_annotation_layer(name=layer_name, annotations=annotations, color='#ff0000')
     )
     state = viewer.to_dict()
 
