@@ -14,7 +14,9 @@ from typing import Optional, List
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from rich.console import Console
-console = Console()
+from rich.syntax import Syntax
+
+console = Console(force_terminal=True, color_system="truecolor")
 
 from anthropic import Anthropic, AsyncAnthropic
 
@@ -179,9 +181,17 @@ async def handle_chat(request: ExtensionRequest):
                             tool_results = []
                             for content_block in claude_response.content:
                                 if content_block.type == "tool_use":
+
                                     console.print(
                                         f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
-                                    console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
+
+                                    if content_block.name == "execute_analysis":
+                                        code_str = content_block.input.get("code", "")
+                                        code_str = code_str.replace("\\n", "\n").replace("\\'", "'")
+                                        syntax = Syntax(code_str, "python", theme="monokai", line_numbers=True, word_wrap=True)
+                                        console.print(syntax)
+                                    else:
+                                        console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
 
                                     friendly_name = content_block.name.replace("_", " ").title()
                                     yield (json.dumps({
