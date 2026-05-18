@@ -215,6 +215,46 @@ async function handleSend() {
   appendMessage('You', text, coords);
   appendMessage('Copilot', 'Processing…', null, true);
 
+  const appendImg = (src) => {
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = 'max-width:100%; margin-top:8px; border-radius:4px;';
+    chatHistory.appendChild(img);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+  };
+
+  const processChunk = (data) => {
+    if (data.type === 'status') {
+      const tempMsg = document.getElementById('temp-msg');
+      if (tempMsg) {
+        tempMsg.innerHTML = `<strong>Copilot:</strong> <em>${data.message}</em>`;
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      }
+    } else if (data.type === 'text') {
+      appendMessage('Copilot', data.content);
+    } else if (data.type === 'image') {
+      appendImg(data.content);
+    } else if (data.type === 'final') {
+      document.getElementById('temp-msg')?.remove();
+      for (const block of (data.blocks || [])) {
+        if (block.type === 'text') appendMessage('Copilot', block.content);
+        else if (block.type === 'image') appendImg(block.content);
+      }
+      if (data.layers && data.layers.length > 0) applyLayersToTab(data.layers);
+      if (data.suggested_position) {
+        appendButton(`Go to results`, () => moveToPosition(data.suggested_position), `Move camera`);
+      }
+      if (data.new_scene) {
+        appendButton(`Open Scene`, () => updateNeuroglancerTab(data.new_scene));
+      }
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+  };
+
+  // fetch + getReader() delivers chunks as they arrive; each await yields to the event loop
+  // so the browser can repaint between status updates.
+  // (Requires media_type="text/plain" on the server — "text/event-stream" causes Chrome to
+  // intercept SSE responses internally, making getReader() return done:true immediately.)
   try {
     const response = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
@@ -222,41 +262,40 @@ async function handleSend() {
       body: JSON.stringify({ prompt: text, ng_state: ngState })
     });
 
-    const data = await response.json();
-    document.getElementById('temp-msg').remove();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let gotFinal = false;
 
-    for (const block of (data.blocks || [{type: 'text', content: 'Done.'}])) {
-      if (block.type === 'text') {
-        appendMessage('Copilot', block.content);
-      } else if (block.type === 'image') {
-        const img = document.createElement('img');
-        img.src = block.content;
-        img.style.cssText = 'max-width:100%; margin-top:8px; border-radius:4px;';
-        chatHistory.appendChild(img);
-        chatHistory.scrollTop = chatHistory.scrollHeight;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep any incomplete trailing line
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.type === 'final') gotFinal = true;
+          processChunk(chunk);
+        } catch (e) {
+          console.error('[chat] parse error:', e, line);
+        }
       }
     }
-
-    // Auto-apply layers (upsert into current scene)
-    if (data.layers && data.layers.length > 0) {
-      applyLayersToTab(data.layers);
+    if (buffer.trim()) {
+      try {
+        const chunk = JSON.parse(buffer);
+        if (chunk.type === 'final') gotFinal = true;
+        processChunk(chunk);
+      } catch (e) {}
     }
 
-    // Camera suggestion — explicit opt-in button
-    if (data.suggested_position) {
-      const pos = data.suggested_position;
-      appendButton(
-        `Go to results`,
-        () => moveToPosition(pos),
-        `Move camera to [${pos.map(c => Math.round(c)).join(', ')}]`
-      );
+    if (!gotFinal) {
+      document.getElementById('temp-msg')?.remove();
+      appendMessage('Copilot', '⚠️ No response received. Check the server logs.');
     }
-
-    // Whole-scene replacement (future use / direct tool output)
-    if (data.new_scene) {
-      appendButton(`Open Scene`, () => updateNeuroglancerTab(data.new_scene));
-    }
-
   } catch (error) {
     document.getElementById('temp-msg')?.remove();
     appendMessage('Copilot', `Network Error: Could not reach backend on port 8080. Is it running?`);

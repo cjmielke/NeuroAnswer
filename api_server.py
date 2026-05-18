@@ -7,6 +7,7 @@ load_dotenv()
 import caveclient
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from nglui import statebuilder
 from pydantic import BaseModel
 from typing import Optional, List
@@ -97,158 +98,182 @@ class ExtensionRequest(BaseModel):
 async def handle_chat(request: ExtensionRequest):
     """The main endpoint the Chrome Extension hits."""
 
-    trace = langfuse_client.start_observation(
-        name="chat",
-        input={"prompt": request.prompt}
-    ) if langfuse_client else None
+    async def generate():
+        try:
+            trace = langfuse_client.start_observation(
+                name="chat",
+                input={"prompt": request.prompt}
+            ) if langfuse_client else None
 
-    contextual_prompt = request.prompt
-    if request.ng_state:
-        state = request.ng_state
-        dataset = identify_dataset(state)
+            contextual_prompt = request.prompt
+            if request.ng_state:
+                state = request.ng_state
+                dataset = identify_dataset(state)
 
-        if dataset is None:
-            return {
-                "reply": "I only support the MICrONs Minnie65 dataset right now. "
-                         "Please open a Minnie65 Neuroglancer session and try again.",
-                "layers": [],
-                "suggested_position": None,
-            }
+                if dataset is None:
+                    yield (json.dumps({
+                        "type": "final",
+                        "blocks": [{"type": "text",
+                                    "content": "I only support the MICrONs Minnie65 dataset right now. Please open a Minnie65 Neuroglancer session and try again."}],
+                        "layers": [],
+                        "suggested_position": None,
+                    }) + "\n").encode('utf-8')
+                    return
 
-        position = state.get("position") or (
-            state.get("navigation", {}).get("pose", {}).get("position", {}).get("voxelCoordinates")
-        )
-        context_parts = [f"Dataset: {dataset}"]
-        if position:
-            context_parts.append(f"Current viewer position (nm): {position}")
-        contextual_prompt += "\n\n[SYSTEM CONTEXT: " + " | ".join(context_parts) + "]"
-        print(contextual_prompt)
-
-    async with sse_client(MCP_SERVER_URL) as streams:
-        async with ClientSession(streams[0], streams[1]) as mcp:
-            await mcp.initialize()
-
-            response = await mcp.list_tools()
-            anthropic_tools = [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": tool.inputSchema
-                }
-                for tool in response.tools
-            ]
-
-            conversation_history.append({"role": "user", "content": contextual_prompt})
-
-            # Accumulate layers by name across tool calls (last write wins per name)
-            scene_layers: dict = {}
-            suggested_position = None
-            blocks: list = []  # ordered {type, content} blocks for the frontend
-            turn = 0
-
-            while True:
-                generation = trace.start_observation(
-                    name=f"claude-turn-{turn}",
-                    as_type="generation",
-                    model=CLAUDE_MODEL,
-                    input=conversation_history,
-                ) if trace else None
-
-                response = await anthropic_client.messages.create(
-                    model=CLAUDE_MODEL,
-                    max_tokens=2000,
-                    messages=conversation_history,
-                    tools=anthropic_tools
+                position = state.get("position") or (
+                    state.get("navigation", {}).get("pose", {}).get("position", {}).get("voxelCoordinates")
                 )
+                context_parts = [f"Dataset: {dataset}"]
+                if position:
+                    context_parts.append(f"Current viewer position (nm): {position}")
+                contextual_prompt += "\n\n[SYSTEM CONTEXT: " + " | ".join(context_parts) + "]"
+                print(contextual_prompt)
 
-                # Update generation completion:
-                if generation:
-                    generation.update(
-                        output=[b.text if b.type == "text" else b.model_dump() for b in response.content],
-                        usage_details={"input": response.usage.input_tokens, "output": response.usage.output_tokens},
-                    )
-                    generation.end()
+            async with sse_client(MCP_SERVER_URL) as streams:
+                async with ClientSession(streams[0], streams[1]) as mcp:
+                    await mcp.initialize()
 
-                conversation_history.append({"role": "assistant", "content": response.content})
-                turn += 1
+                    tools_response = await mcp.list_tools()
+                    anthropic_tools = [
+                        {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "input_schema": tool.inputSchema
+                        }
+                        for tool in tools_response.tools
+                    ]
 
-                if response.stop_reason == "tool_use":
-                    for content_block in response.content:
-                        if content_block.type == "tool_use":
-                            console.print(f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
-                            console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
+                    conversation_history.append({"role": "user", "content": contextual_prompt})
 
-                            tool_span = trace.start_observation(
-                                name=content_block.name,
-                                as_type="span",
-                                input=content_block.input,
-                            ) if trace else None
+                    scene_layers: dict = {}
+                    suggested_position = None
+                    turn = 0
 
-                            result = await mcp.call_tool(content_block.name, content_block.input)
+                    while True:
+                        generation = trace.start_observation(
+                            name=f"claude-turn-{turn}",
+                            as_type="generation",
+                            model=CLAUDE_MODEL,
+                            input=conversation_history,
+                        ) if trace else None
 
-                            # Images pass through directly; text blocks are processed below
-                            image_blocks = []
-                            raw_text_parts = []
-                            for item in result.content:
-                                if item.type == "text":
-                                    raw_text_parts.append(item.text)
-                                elif item.type == "image":
-                                    image_blocks.append({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"})
+                        claude_response = await anthropic_client.messages.create(
+                            model=CLAUDE_MODEL,
+                            max_tokens=2000,
+                            messages=conversation_history,
+                            tools=anthropic_tools
+                        )
 
-                            raw_text = "\n\n".join(raw_text_parts)
+                        if generation:
+                            generation.update(
+                                output=[b.text if b.type == "text" else b.model_dump() for b in claude_response.content],
+                                usage_details={"input": claude_response.usage.input_tokens,
+                                               "output": claude_response.usage.output_tokens},
+                            )
+                            generation.end()
 
-                            if tool_span:
-                                tool_span.update(output=raw_text[:2000])
-                                tool_span.end()
+                        conversation_history.append({"role": "assistant", "content": claude_response.content})
+                        turn += 1
 
-                            short_result = raw_text[:300] + "..." if len(raw_text) > 300 else raw_text
-                            console.print(f"[green]📤 Result:[/green] {short_result}\n")
+                        if claude_response.stop_reason == "tool_use":
+                            tool_results = []
+                            for content_block in claude_response.content:
+                                if content_block.type == "tool_use":
+                                    console.print(
+                                        f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
+                                    console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
 
-                            # If the text is a structured dict, extract layers/position and use summary for display
-                            try:
-                                tool_data = json.loads(raw_text)
-                                for layer in tool_data.get("layers", []):
-                                    name = layer.get("name", f"layer_{len(scene_layers)}")
-                                    scene_layers[name] = layer
-                                if tool_data.get("suggested_position") is not None:
-                                    suggested_position = tool_data["suggested_position"]
-                                clean_result = tool_data.get("summary", raw_text)
-                                display_text = clean_result
-                            except json.JSONDecodeError:
-                                clean_result = raw_text
-                                display_text = raw_text
+                                    friendly_name = content_block.name.replace("_", " ").title()
+                                    yield (json.dumps({
+                                        "type": "status",
+                                        "message": f"⚙️ {friendly_name}..."
+                                    }) + "\n").encode('utf-8')
 
-                            if display_text:
-                                blocks.append({"type": "text", "content": display_text})
-                            blocks.extend(image_blocks)
+                                    tool_span = trace.start_observation(
+                                        name=content_block.name,
+                                        as_type="span",
+                                        input=content_block.input,
+                                    ) if trace else None
 
-                            conversation_history.append({
-                                "role": "user",
-                                "content": [
-                                    {
+                                    result = await mcp.call_tool(content_block.name, content_block.input)
+
+                                    image_blocks = []
+                                    raw_text_parts = []
+                                    for item in result.content:
+                                        if item.type == "text":
+                                            raw_text_parts.append(item.text)
+                                        elif item.type == "image":
+                                            image_blocks.append({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"})
+
+                                    raw_text = "\n\n".join(raw_text_parts)
+
+                                    if tool_span:
+                                        tool_span.update(output=raw_text[:2000])
+                                        tool_span.end()
+
+                                    short_result = raw_text[:300] + "..." if len(raw_text) > 300 else raw_text
+                                    console.print(f"[green]📤 Result:[/green] {short_result}\n")
+
+                                    try:
+                                        tool_data = json.loads(raw_text)
+                                        if isinstance(tool_data, dict):
+                                            for layer in tool_data.get("layers", []):
+                                                name = layer.get("name", f"layer_{len(scene_layers)}")
+                                                scene_layers[name] = layer
+                                            if tool_data.get("suggested_position") is not None:
+                                                suggested_position = tool_data["suggested_position"]
+                                            clean_result = tool_data.get("summary", raw_text)
+                                        else:
+                                            clean_result = raw_text
+                                        display_text = str(clean_result) if not isinstance(clean_result, str) else clean_result
+                                    except Exception:
+                                        clean_result = raw_text
+                                        display_text = raw_text
+
+                                    if display_text:
+                                        yield (json.dumps({"type": "text", "content": display_text}) + "\n").encode('utf-8')
+                                    for ib in image_blocks:
+                                        yield (json.dumps({"type": "image", "content": ib["content"]}) + "\n").encode('utf-8')
+
+                                    # Collect all tool results to send in one message (API requirement)
+                                    tool_results.append({
                                         "type": "tool_result",
                                         "tool_use_id": content_block.id,
-                                        "content": clean_result
-                                    }
-                                ]
-                            })
-                else:
-                    final_text = next(
-                        (block.text for block in response.content if block.type == "text"),
-                        "Done."
-                    )
-                    if trace:
-                        trace.update(output={"reply": final_text})
-                        trace.end()
-                    if langfuse_client:
-                        langfuse_client.flush()
+                                        "content": str(clean_result) if not isinstance(clean_result, str) else clean_result,
+                                    })
 
-                    blocks.append({"type": "text", "content": final_text})
-                    return {
-                        "blocks": blocks,
-                        "layers": list(scene_layers.values()),
-                        "suggested_position": suggested_position,
-                    }
+                            conversation_history.append({"role": "user", "content": tool_results})
+                        else:
+                            final_text = next(
+                                (block.text for block in claude_response.content if block.type == "text"),
+                                "Done."
+                            )
+                            if trace:
+                                trace.update(output={"reply": final_text})
+                                trace.end()
+                            if langfuse_client:
+                                langfuse_client.flush()
+
+                            yield (json.dumps({
+                                "type": "final",
+                                "blocks": [{"type": "text", "content": final_text}],
+                                "layers": list(scene_layers.values()),
+                                "suggested_position": suggested_position,
+                            }) + "\n").encode('utf-8')
+                            return
+
+        except Exception as e:
+            import traceback
+            console.print(f"[bold red]❌ generate() error:[/bold red] {e}", highlight=False)
+            traceback.print_exc()
+            yield (json.dumps({
+                "type": "final",
+                "blocks": [{"type": "text", "content": f"⚠️ Server error: {e}"}],
+                "layers": [],
+                "suggested_position": None,
+            }) + "\n").encode('utf-8')
+
+    return StreamingResponse(generate(), media_type="text/plain")
 
 
 @app.post("/reset")
