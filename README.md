@@ -17,6 +17,16 @@ NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) co
 
 Ive created an MCP tool that allows Claude to generate and execute python against pre-loaded dataframes, allowing generic scientific queries. Scientific figures render directly in the chat window!
 
+For example, the prompt
+```text
+Show me the 10 closest neurons in this field of view. Then for each of those neurons, query the API to find their downstream neurons. For that pooled set of synapses, render a horizontal violin plot showing the distributions of synapse size by the mtype of the downstream neuron
+```
+Produced the following analysis
+
+![a violin plot showing the distribution of synapse sizes for each neuronal m-type](img/synapse_size_mtype.png)
+
+#### More examples
+
 ![pie chart showing downstream neuron class](img/pie.png)
 
 ![histogram of synapse sizes](img/histogram.png)
