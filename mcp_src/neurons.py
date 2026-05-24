@@ -77,7 +77,7 @@ class StructuralPopulationResult(BaseModel):
     memory_reference_id: str = Field(description="The pointer to the heavy 3D data. Pass this ONLY to the scene builder tool.")
 
 
-@mcp_server.tool()
+#@mcp_server.tool()
 def search_excitatory_population(
         mtype: Literal[
             "L2a", "L2b", "L2c", "L3a", "L3b", "L4a", "L4b", "L4c",

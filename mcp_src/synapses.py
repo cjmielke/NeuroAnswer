@@ -1,9 +1,7 @@
 import time
-
 from nglui import statebuilder
 from nglui.statebuilder import PointAnnotation, LineAnnotation
 from pydantic import Field
-
 from mcp_src.core import mcp_server, cave_client, session
 import pandas as pd
 from typing import Literal
