@@ -1,5 +1,13 @@
 # NeuroAnswer
 
+---
+
+**NOTE** : This branch is "v1" and is being parked here before a major refactor. 
+V1 uses a FastAPI "relay server" to communicate between the MCP server and chrome-extension, which interfaces via JavaScript to NeuroGlancer.
+The refactor will completely eliminate the FastAPI relay, and move the MCP server to a more central player that manages NeuroGlancer directly.
+
+---
+
 An AI copilot for exploring the [MICrONs Minnie65](https://www.microns-explorer.org/) connectome dataset. NeuroAnswer lets researchers query 200,000+ neurons and 500 million synapses using natural language, with results rendered directly in [Neuroglancer](https://github.com/google/neuroglancer).
 
 ![NeuroAnswer Screenshot](img/screenshot1.png)
