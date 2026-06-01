@@ -6,15 +6,11 @@
   <style>
     body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 15px; margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
     h3 { color: #569cd6; margin-top: 0; }
-    #error-state, #app-state { display: none; flex: 1; flex-direction: column; }
-    #error-state { border-left: 4px solid #f44336; padding-left: 10px; }
 
-    /* Chat Container */
     #chat-history { flex: 1; overflow-y: auto; margin-bottom: 15px; padding-right: 5px; }
     .msg { margin-bottom: 12px; line-height: 1.4; }
     .msg-user { color: #4caf50; }
     .msg-bot { color: #cecece; }
-    .coord-badge { background: #333; color: #569cd6; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
 
     /* Input Area */
     .input-row { display: flex; gap: 8px; }
@@ -25,26 +21,13 @@
   </style>
   <script src="marked.min.js"></script>
 </head>
-<body>
+<body style="display: flex; flex-direction: column;">
 
-  <div id="error-state">
-    <h3>Neuroglancer Not Found</h3>
-    <p>Please navigate to a Neuroglancer tab.</p>
-    <button id="refresh-btn">Check Again</button>
-    <hr style="border-color: #444; margin: 12px 0;">
-    <p style="color: #888; font-size: 0.85em;">Or open a supported dataset:</p>
-    <div id="scene-menu"></div>
-  </div>
-
-  <div id="app-state">
-    <h3>Neuro Copilot</h3>
-
-    <div id="chat-history"></div>
-
-    <div class="input-row">
-      <input type="text" id="chat-input" placeholder="Query the connectome...">
-      <button id="send-btn">Send</button>
-    </div>
+  <h3>NeuroAnswer</h3>
+  <div id="chat-history"></div>
+  <div class="input-row">
+    <input type="text" id="chat-input" placeholder="Query the connectome...">
+    <button id="send-btn">Send</button>
   </div>
 
   <script src="sidepanel.js"></script>

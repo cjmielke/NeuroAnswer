@@ -4,17 +4,7 @@
   "version": "1.0",
   "description": "AI Agent for Connectomics",
   "permissions": [
-    "sidePanel",
-    "tabs",
-    "activeTab",
-    "scripting"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["*://*/*"],
-      "js": ["content_script.js"],
-      "run_at": "document_idle"
-    }
+    "sidePanel"
   ],
   "action": {
     "default_title": "Open Neuro Copilot",

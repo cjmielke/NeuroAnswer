@@ -1,16 +1,12 @@
 import os
 import json
-import time
 from dotenv import load_dotenv
 load_dotenv()
 
-import caveclient
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from nglui import statebuilder
 from pydantic import BaseModel
-from typing import Optional, List
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from rich.console import Console
@@ -61,39 +57,8 @@ app.add_middleware(
 )
 
 
-KNOWN_DATASETS = {
-    "minnie65": {
-        "label": "MICrONs Minnie65",
-        "description": "Mouse visual cortex, ~1mm³ cortical column",
-        "cave_dataset": "minnie65_public",
-    }
-}
-
-
-def _source_to_url(source) -> str:
-    """Normalise a Neuroglancer source field (string, dict, or list) to a URL string."""
-    if isinstance(source, str):
-        return source
-    if isinstance(source, dict):
-        return source.get("url", "")
-    if isinstance(source, list) and source:
-        return _source_to_url(source[0])
-    return ""
-
-
-def identify_dataset(ng_state: dict) -> Optional[str]:
-    """Return the dataset label if a known dataset is found in the layer sources."""
-    for layer in ng_state.get("layers", []):
-        url = _source_to_url(layer.get("source", ""))
-        for key, ds in KNOWN_DATASETS.items():
-            if key in url:
-                return ds["label"]
-    return None
-
-
 class ExtensionRequest(BaseModel):
     prompt: str
-    ng_state: Optional[dict] = None
 
 
 @app.post("/chat")
@@ -106,30 +71,6 @@ async def handle_chat(request: ExtensionRequest):
                 name="chat",
                 input={"prompt": request.prompt}
             ) if langfuse_client else None
-
-            contextual_prompt = request.prompt
-            if request.ng_state:
-                state = request.ng_state
-                dataset = identify_dataset(state)
-
-                if dataset is None:
-                    yield (json.dumps({
-                        "type": "final",
-                        "blocks": [{"type": "text",
-                                    "content": "I only support the MICrONs Minnie65 dataset right now. Please open a Minnie65 Neuroglancer session and try again."}],
-                        "layers": [],
-                        "suggested_position": None,
-                    }) + "\n").encode('utf-8')
-                    return
-
-                position = state.get("position") or (
-                    state.get("navigation", {}).get("pose", {}).get("position", {}).get("voxelCoordinates")
-                )
-                context_parts = [f"Dataset: {dataset}"]
-                if position:
-                    context_parts.append(f"Current viewer position (nm): {position}")
-                contextual_prompt += "\n\n[SYSTEM CONTEXT: " + " | ".join(context_parts) + "]"
-                print(contextual_prompt)
 
             async with sse_client(MCP_SERVER_URL) as streams:
                 async with ClientSession(streams[0], streams[1]) as mcp:
@@ -145,10 +86,8 @@ async def handle_chat(request: ExtensionRequest):
                         for tool in tools_response.tools
                     ]
 
-                    conversation_history.append({"role": "user", "content": contextual_prompt})
+                    conversation_history.append({"role": "user", "content": request.prompt})
 
-                    scene_layers: dict = {}
-                    suggested_position = None
                     turn = 0
 
                     while True:
@@ -182,8 +121,7 @@ async def handle_chat(request: ExtensionRequest):
                             for content_block in claude_response.content:
                                 if content_block.type == "tool_use":
 
-                                    console.print(
-                                        f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
+                                    console.print(f"\n[bold blue]🤖 Claude is calling tool:[/bold blue] {content_block.name}")
 
                                     if content_block.name == "execute_analysis":
                                         code_str = content_block.input.get("code", "")
@@ -227,11 +165,6 @@ async def handle_chat(request: ExtensionRequest):
                                     try:
                                         tool_data = json.loads(raw_text)
                                         if isinstance(tool_data, dict):
-                                            for layer in tool_data.get("layers", []):
-                                                name = layer.get("name", f"layer_{len(scene_layers)}")
-                                                scene_layers[name] = layer
-                                            if tool_data.get("suggested_position") is not None:
-                                                suggested_position = tool_data["suggested_position"]
                                             clean_result = tool_data.get("summary", raw_text)
                                         else:
                                             clean_result = raw_text
@@ -267,8 +200,6 @@ async def handle_chat(request: ExtensionRequest):
                             yield (json.dumps({
                                 "type": "final",
                                 "blocks": [{"type": "text", "content": final_text}],
-                                "layers": list(scene_layers.values()),
-                                "suggested_position": suggested_position,
                             }) + "\n").encode('utf-8')
                             return
 
@@ -279,8 +210,6 @@ async def handle_chat(request: ExtensionRequest):
             yield (json.dumps({
                 "type": "final",
                 "blocks": [{"type": "text", "content": f"⚠️ Server error: {e}"}],
-                "layers": [],
-                "suggested_position": None,
             }) + "\n").encode('utf-8')
 
     return StreamingResponse(generate(), media_type="text/plain")
@@ -290,73 +219,6 @@ async def handle_chat(request: ExtensionRequest):
 async def reset_conversation():
     conversation_history.clear()
     return {"status": "conversation cleared"}
-
-
-@app.get("/scenes")
-async def list_scenes():
-    return {
-        "scenes": [
-            {"id": key, "label": ds["label"], "description": ds["description"]}
-            for key, ds in KNOWN_DATASETS.items()
-        ]
-    }
-
-'''
-{
-  "dimensions": {"x": [1e-9,"m"],"y": [1e-9,"m"],"z": [1e-9,"m"]},
-  "position": [ 962560, 831488, 854400],
-  "crossSectionScale": 1,
-  "projectionOrientation": [0.4607859253883362, -0.5477277040481567, -0.2193523645401001, 0.662989616394043],
-  "projectionScale": 50000,
-  "layers": [
-    {
-      "type": "image",
-      "source": "precomputed://https://bossdb-open-data.s3.amazonaws.com/iarpa_microns/minnie/minnie65/em",
-      "tab": "source",
-      "name": "EM_Background"
-    },
-    {
-      "type": "segmentation",
-      "source": "graphene://middleauth+https://minnie.microns-daf.com/segmentation/table/minnie65_public",
-      "tab": "source",
-      "selectedAlpha": 0.2,
-      "objectAlpha": 0.9,
-      "segments": [],
-      "name": "3D_Meshes"
-    }
-  ],
-  "showSlices": false,
-  "layout": "xy-3d"
-}
-'''
-
-
-
-@app.get("/new_scene/{dataset_id}")
-async def get_new_scene(dataset_id: str):
-    if dataset_id not in KNOWN_DATASETS:
-        return {"error": f"Unknown dataset: {dataset_id}"}
-    ds = KNOWN_DATASETS[dataset_id]
-    start = time.time()
-    client = caveclient.CAVEclient(ds["cave_dataset"], auth_token=os.environ['CAVE_TOKEN'])
-    print(f'took {time.time()-start} seconds to init caveclient')
-    start = time.time()
-    em_source = client.info.image_source()
-    print(f'took {time.time() - start} seconds to get image_source')
-    start = time.time()
-    seg_source = client.info.segmentation_source()
-    print(f'took {time.time() - start} seconds to get segmentation_source')
-    start = time.time()
-    viewer = (
-        statebuilder.ViewerState(dimensions=[1, 1, 1], position=[962560, 831488, 854400], infer_coordinates=False)
-        .add_image_layer(name='EM_Background', source=em_source)
-        .add_segmentation_layer(name='3D_Meshes', source=seg_source, segments=[])
-    )
-    print(f'took {time.time() - start} seconds to make viewer')
-    start = time.time()
-    scene_url = viewer.to_url(target_url='https://neuroglancer-demo.appspot.com/')
-    print(f'took {time.time() - start} seconds to make scene_url')
-    return {"scene_url": scene_url, "label": ds["label"]}
 
 
 if __name__ == "__main__":
