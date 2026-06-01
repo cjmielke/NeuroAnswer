@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict
 import caveclient
 import pandas as pd
+from platformdirs import user_cache_dir
 
 
 mcp_server = FastMCP("NeuroAnswer", host=os.environ.get("MCP_HOST", "127.0.0.1"), port=8000)
@@ -17,7 +18,7 @@ class ConnectomeSession:
     """Manages the in-memory state so Claude doesn't crash on massive datasets."""
 
     # Cache configuration
-    CACHE_DIR = Path(os.environ['CACHE_DIR'])
+    CACHE_DIR = Path(os.environ.get('CACHE_DIR', user_cache_dir('neuroanswer')))
     CACHE_TIMEOUT_SECONDS = 7 * 24 * 60 * 60  # 1 week in seconds
 
     def __init__(self):

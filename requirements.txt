@@ -1,4 +1,5 @@
 anthropic
+platformdirs
 caveclient
 cloud-volume
 fastapi

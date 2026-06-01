@@ -9,6 +9,7 @@ services:
       - 8.8.4.4
     environment:
       - MCP_HOST=0.0.0.0
+      - CACHE_DIR=/app/data
     volumes:
       #- ~/.cloudvolume:/root/.cloudvolume:ro
       - ./data:/app/data
