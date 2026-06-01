@@ -22,18 +22,25 @@ const appendDetail = (toolName, content) => {
   const summary = document.createElement('summary');
   summary.textContent = `${toolName} result`;
   const pre = document.createElement('pre');
-  pre.textContent = JSON.stringify(content, null, 2);
+  const codeEl = document.createElement('code');
+  codeEl.className = 'language-json';
+  codeEl.textContent = JSON.stringify(content, null, 2);
+  pre.appendChild(codeEl);
   details.appendChild(summary);
   details.appendChild(pre);
   chatHistory.appendChild(details);
+  Prism.highlightElement(codeEl);
   chatHistory.scrollTop = chatHistory.scrollHeight;
 };
 
 const appendCode = (code) => {
   const pre = document.createElement('pre');
-  pre.className = 'code-block';
-  pre.textContent = code;
+  const codeEl = document.createElement('code');
+  codeEl.className = 'language-python';
+  codeEl.textContent = code;
+  pre.appendChild(codeEl);
   chatHistory.appendChild(pre);
+  Prism.highlightElement(codeEl);
   chatHistory.scrollTop = chatHistory.scrollHeight;
 };
 
