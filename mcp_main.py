@@ -18,9 +18,11 @@ os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/dev/null'
 warnings.filterwarnings("ignore", module="cloudvolume")
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
+import logging
 from mcp_src.core import mcp_server
+from mcp_src.ng import viewer
 from mcp_src import neurons, synapses, scene, analysis
+logging.info(viewer.get_viewer_url())
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import logging
 import time
 from nglui import statebuilder
 from nglui.statebuilder import PointAnnotation, LineAnnotation
@@ -24,7 +25,7 @@ def get_downstream_synapses(
     )
     if df_synapses.empty:
         return json.dumps({"summary": f"No outgoing synapses found for {neuron_root_id}."})
-    print(f'Got {len(df_synapses)} rows from pre_pt_root_id')
+    logging.info(f'Got {len(df_synapses)} rows from pre_pt_root_id')
 
 
     # Get the strongest structural targets (ignoring ID 0)
@@ -115,7 +116,7 @@ def get_downstream_synapses(
 
 
 
-@mcp_server.tool()
+#@mcp_server.tool()
 def get_targeted_compartments(
         post_root_id: int,
         compartment: Literal['soma', 'shaft', 'spine'] = 'soma'
@@ -126,7 +127,7 @@ def get_targeted_compartments(
 
     Returns a memory_reference_id containing the 3D coordinates of those synapses.
     """
-    print(f"Fetching synapses targeting cell {post_root_id}...")
+    logging.info(f"Fetching synapses targeting cell {post_root_id}...")
 
     # 1. Get all synapses where our cell is the receiver (post-synaptic)
     df_synapses = cave_client.materialize.query_table(
@@ -139,7 +140,7 @@ def get_targeted_compartments(
 
     synapse_ids = df_synapses['id'].tolist()
 
-    print(f"Found {len(synapse_ids)} synapses. Fetching compartment predictions...")
+    logging.info(f"Found {len(synapse_ids)} synapses. Fetching compartment predictions...")
 
     # 2. Surgically query the massive prediction table using ONLY our specific synapse IDs
     df_predictions = cave_client.materialize.query_table(

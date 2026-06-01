@@ -14,5 +14,7 @@ matplotlib
 langfuse
 tabulate
 loguru
+pydantic
+
 
 
