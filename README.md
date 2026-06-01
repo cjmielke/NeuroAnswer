@@ -20,15 +20,15 @@ Claude can now take a screenshot of the active Neuroglancer viewport and interpr
 
 ### What changed
 
-| | v1 | v2 |
-|---|---|---|
-| **Neuroglancer control** | Extension pushed state via URL hash | MCP server owns the `Viewer` object directly |
-| **Camera / layers** | Extension rewrote the browser URL | MCP tools call `viewer.txn()` server-side |
-| **Screenshots** | Not possible | `viewer.screenshot()` returns rendered image; Claude sees it |
-| **Auth** | Chrome cookie / Google OAuth popup | `MiddleAuthProvider` injects CAVE token server-side |
-| **Chat UI** | Chrome extension sidebar | Chrome extension sidebar (kept); Claude Desktop tested but doesn't render tool images |
-| **Transport** | MCP over SSE | MCP over SSE (unchanged); stdio available for Claude Desktop |
-| **Neuroglancer URL** | Random token, changed on restart | Stable token via `NEUROGLANCER_TOKEN` env var |
+| | v1 | v2                                                                                                                                                                                      |
+|---|---|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Neuroglancer control** | Extension pushed state via URL hash | MCP server owns the `Viewer` object directly                                                                                                                                            |
+| **Camera / layers** | Extension rewrote the browser URL | MCP tools call `viewer.txn()` server-side                                                                                                                                               |
+| **Screenshots** | Not possible | `viewer.screenshot()` returns rendered image; Claude sees it                                                                                                                            |
+| **Auth** | Chrome cookie / Google OAuth popup | `MiddleAuthProvider` injects CAVE token server-side                                                                                                                                     |
+| **Chat UI** | Chrome extension sidebar | Chrome extension sidebar (kept); Claude Desktop tested but doesn't render tool images. *Bonus* : Generated python code is now shown in the UI with syntax highlighting powered by prism |
+| **Transport** | MCP over SSE | MCP over SSE (unchanged); stdio available for Claude Desktop                                                                                                                            |
+| **Neuroglancer URL** | Random token, changed on restart | Stable token via `NEUROGLANCER_TOKEN` env var                                                                                                                                           |
 
 ### Removed
 - `nglui` scene URL construction (layers are now set directly on the viewer)
