@@ -1,8 +1,13 @@
 const API_BASE = 'http://127.0.0.1:8080';
+const NEUROGLANCER_PORT = 8675;
+const NEUROGLANCER_TOKEN = 'neuroanswer';
+const NEUROGLANCER_URL = `http://127.0.0.1:${NEUROGLANCER_PORT}/v/${NEUROGLANCER_TOKEN}/`;
 
 const chatHistory = document.getElementById('chat-history');
 const chatInput   = document.getElementById('chat-input');
 const sendBtn     = document.getElementById('send-btn');
+
+document.getElementById('ng-btn').href = NEUROGLANCER_URL;
 
 
 // --- CHAT ---

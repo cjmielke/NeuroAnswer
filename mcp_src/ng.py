@@ -10,7 +10,10 @@ from mcp.types import ImageContent
 from mcp_src.core import mcp_server
 from pydantic import Field
 
-neuroglancer.set_server_bind_address(bind_port=os.environ.get('NEUROGLANCER_PORT', 8675))
+neuroglancer.set_server_bind_address(
+    bind_address=os.environ.get('NEUROGLANCER_HOST', '0.0.0.0'),
+    bind_port=int(os.environ.get('NEUROGLANCER_PORT', 8675)),
+)
 
 class MiddleAuthProvider(CredentialsProvider):
     def __init__(self, token: str):
@@ -27,7 +30,10 @@ default_credentials_manager.register(
     lambda _origin: MiddleAuthProvider(os.environ["CAVE_TOKEN"]),
 )
 
-viewer = neuroglancer.Viewer()
+viewer = neuroglancer.Viewer(
+    token=os.environ.get('NEUROGLANCER_TOKEN', 'neuroanswer'),
+    allow_credentials=True,
+)
 
 
 def on_select(action_state):

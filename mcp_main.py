@@ -32,4 +32,3 @@ if __name__ == "__main__":
     # Binds the MCP server to a local TCP port using Server-Sent Events
     mcp_server.run(transport='sse')
 
-
