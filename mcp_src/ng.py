@@ -135,11 +135,13 @@ def get_neuroglancer_viewer_state():
 
 @mcp_server.tool()
 def get_neuroglancer_screenshot():
-    """
-    Call this tool to see exactly what the user can see in the current NeuroGlancer viewport
-    """
-    screenshot = viewer.screenshot()
-    return [ImageContent(type="image", data=base64.b64encode(screenshot.screenshot.image).decode(), mimeType="image/png")]
+    """Call this tool to see exactly what the user can see in the current NeuroGlancer viewport"""
+    future = concurrent.futures.ThreadPoolExecutor(max_workers=1).submit(viewer.screenshot)
+    try:
+        action_state = future.result(timeout=15)
+    except concurrent.futures.TimeoutError:
+        return "Screenshot timed out — open the Neuroglancer viewer in a browser tab first."
+    return [ImageContent(type="image", data=base64.b64encode(action_state.screenshot.image).decode(), mimeType="image/png")]
 
 
 @mcp_server.tool()
