@@ -57,6 +57,9 @@ app.add_middleware(
 )
 
 
+# Tools whose results are consumed by Claude but not surfaced in the chat UI
+SILENT_TOOLS = {"get_neuroglancer_screenshot", "get_neuroglancer_viewer_state"}
+
 class ExtensionRequest(BaseModel):
     prompt: str
 
@@ -181,9 +184,9 @@ async def handle_chat(request: ExtensionRequest):
                                         clean_result = raw_text
                                         display_text = raw_text
 
-                                    if display_text:
-                                        yield (json.dumps({"type": "text", "content": display_text}) + "\n").encode('utf-8')
-                                    if content_block.name != "get_neuroglancer_screenshot":
+                                    if content_block.name not in SILENT_TOOLS:
+                                        if display_text:
+                                            yield (json.dumps({"type": "text", "content": display_text}) + "\n").encode('utf-8')
                                         for item in image_items:
                                             yield (json.dumps({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"}) + "\n").encode('utf-8')
 

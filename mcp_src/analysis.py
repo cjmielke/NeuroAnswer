@@ -105,7 +105,7 @@ def execute_analysis(code: str) -> List[TextContent | ImageContent]:
             report_blocks.append(ImageContent(type="image", data=base64.b64encode(buf.getvalue()).decode(), mimeType="image/png"))
 
     namespace = {
-        'neurons_df': session.excitatory_cache,
+        'neurons_df': session.aibs_metamodel_mtypes_v661_v2,
         'np': np, 'pd': pd, 'plt': plt, 'Image': PILImage,
         'display': display, 'downstream_synapes': downstream_synapes
     }
