@@ -93,7 +93,7 @@ Chrome Extension (sidebar UI)
         ↕
 FastAPI Gateway (relay server)
         ↕
-MCP Server (FastMCP + CAVE client)
+MCP Server (FastMCP)   <->  NeuroGlancer (local server with Python/websockets API)
         ↕
 CAVE / MICrONs Minnie65 cloud database
 ```
