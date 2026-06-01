@@ -98,14 +98,14 @@ MCP Server (FastMCP)   <->  NeuroGlancer (local server with Python/websockets AP
 CAVE / MICrONs Minnie65 cloud database
 ```
 
-The MCP server exposes domain-specific tools — spatial search, synapse queries, scene construction — that Claude calls through the standard MCP protocol. A FastAPI gateway bridges the Chrome extension's HTTP requests to the MCP server. The extension injects a chat sidebar into the Neuroglancer interface and pushes returned scene state (layers, annotations, camera position) directly into the viewer.
+The MCP server exposes domain-specific tools — spatial search, synapse queries, camera control, and scene construction — that Claude calls through the standard MCP protocol. It also hosts the Neuroglancer server directly, so tool calls mutate the viewer state in real time without any browser-side coordination. A FastAPI gateway bridges the Chrome extension's HTTP requests to the MCP server and streams tool results (text, images, syntax-highlighted code) back to the sidebar.
 
 Neuron metadata is cached locally as Parquet files to keep spatial queries fast. Synapse data is fetched live from CAVE on demand - a bit slower, but I'm working on it!
 
 
 ## Built with
 
-Python · FastMCP · CAVEclient · nglui · FastAPI · Chrome Extensions API
+Python · FastMCP · CAVEclient · NeuroGlancer · FastAPI · Chrome Extensions API
 
 ## Installation
 
@@ -123,6 +123,8 @@ To query the structural brain graph, you need a CAVE API token, along with your 
    ANTHROPIC_API_KEY=your_claude_key_here
    CAVE_TOKEN=your_copied_cave_token_here
    LANGFUSE_PUBLIC_KEY=optional_telemetry_key
+   ```
+   `CACHE_DIR` is optional — the server defaults to the OS-appropriate user cache directory. When running via Docker, it is automatically set to `/app/data` (the mounted volume) so no override is needed.
 
 Note, I'm using "LangFuse" to log my chats during development. If you want to do the same, you can
 sign up for a free account, create API keys, and also place them in the .env file. 
@@ -140,7 +142,7 @@ You'll need to install the Google Chrome extension for the fun part. Its not in 
 - In Google Chrome, type `chrome://extensions` in the URL bar and hit enter
 - Enable `developer mode` with the toggle button
 - Click `Load unpacked` and then navigate to the `chrome_extension` directory in this cloned repository
-- When you open the extension, it will inform you if it doesn't see a NeuroGlancer tab, but it will list available datasets
+- When you open the extension, click the **Open Neuroglancer ↗** link at the top of the sidebar to open the locally-hosted viewer
 
 ## Feedback
 
