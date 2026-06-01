@@ -128,6 +128,11 @@ async def handle_chat(request: ExtensionRequest):
                                         code_str = code_str.replace("\\n", "\n").replace("\\'", "'")
                                         syntax = Syntax(code_str, "python", theme="monokai", line_numbers=True, word_wrap=True)
                                         console.print(syntax)
+                                        yield (json.dumps({
+                                            "type": "code",
+                                            "language": "python",
+                                            "content": code_str,
+                                        }) + "\n").encode('utf-8')
                                     else:
                                         console.print(f"[cyan]📥 Inputs:[/cyan] {content_block.input}")
 
@@ -166,6 +171,8 @@ async def handle_chat(request: ExtensionRequest):
                                         tool_data = json.loads(raw_text)
                                         if isinstance(tool_data, dict):
                                             clean_result = tool_data.get("summary", raw_text)
+                                            if len(tool_data) > 1:
+                                                yield (json.dumps({"type": "detail", "tool": content_block.name, "content": tool_data}) + "\n").encode('utf-8')
                                         else:
                                             clean_result = raw_text
                                         display_text = str(clean_result) if not isinstance(clean_result, str) else clean_result

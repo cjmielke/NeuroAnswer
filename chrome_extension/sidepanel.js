@@ -16,27 +16,26 @@ function appendMessage(sender, text, isTemp = false) {
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
-function appendButton(label, onClick, title = '') {
-  const btn = document.createElement('button');
-  btn.innerText = label;
-  btn.className = 'goto_scene_btn';
-  if (title) btn.title = title;
-  if (onClick) btn.onclick = onClick;
-  chatHistory.appendChild(btn);
+const appendDetail = (toolName, content) => {
+  const details = document.createElement('details');
+  details.className = 'tool-detail';
+  const summary = document.createElement('summary');
+  summary.textContent = `${toolName} result`;
+  const pre = document.createElement('pre');
+  pre.textContent = JSON.stringify(content, null, 2);
+  details.appendChild(summary);
+  details.appendChild(pre);
+  chatHistory.appendChild(details);
   chatHistory.scrollTop = chatHistory.scrollHeight;
-  return btn;
-}
+};
 
-
-async function handleSend() {
-  const text = chatInput.value.trim();
-  if (!text) return;
-
-  chatInput.value = '';
-  const ngState = getNeuroglancerState();
-  const coords  = getPositionFromState(ngState);
-  appendMessage('You', text, coords);
-  appendMessage('Copilot', 'Processing…', null, true);
+const appendCode = (code) => {
+  const pre = document.createElement('pre');
+  pre.className = 'code-block';
+  pre.textContent = code;
+  chatHistory.appendChild(pre);
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+};
 
 const appendImg = (src) => {
   const img = document.createElement('img');
@@ -57,6 +56,10 @@ const processChunk = (data) => {
     appendMessage('AI', data.content);
   } else if (data.type === 'image') {
     appendImg(data.content);
+  } else if (data.type === 'detail') {
+    appendDetail(data.tool, data.content);
+  } else if (data.type === 'code') {
+    appendCode(data.content);
   } else if (data.type === 'final') {
     document.getElementById('temp-msg')?.remove();
     for (const block of (data.blocks || [])) {
