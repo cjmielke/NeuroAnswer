@@ -66,6 +66,7 @@ async def handle_chat(request: ExtensionRequest):
     """The main endpoint the Chrome Extension hits."""
 
     async def generate():
+        history_checkpoint = len(conversation_history)
         try:
             trace = langfuse_client.start_observation(
                 name="chat",
@@ -150,13 +151,13 @@ async def handle_chat(request: ExtensionRequest):
 
                                     result = await mcp.call_tool(content_block.name, content_block.input)
 
-                                    image_blocks = []
+                                    image_items = []
                                     raw_text_parts = []
                                     for item in result.content:
                                         if item.type == "text":
                                             raw_text_parts.append(item.text)
                                         elif item.type == "image":
-                                            image_blocks.append({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"})
+                                            image_items.append(item)
 
                                     raw_text = "\n\n".join(raw_text_parts)
 
@@ -182,14 +183,21 @@ async def handle_chat(request: ExtensionRequest):
 
                                     if display_text:
                                         yield (json.dumps({"type": "text", "content": display_text}) + "\n").encode('utf-8')
-                                    for ib in image_blocks:
-                                        yield (json.dumps({"type": "image", "content": ib["content"]}) + "\n").encode('utf-8')
+                                    if content_block.name != "get_neuroglancer_screenshot":
+                                        for item in image_items:
+                                            yield (json.dumps({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"}) + "\n").encode('utf-8')
 
-                                    # Collect all tool results to send in one message (API requirement)
+                                    # Build tool_result content for Claude — include images so Claude can see screenshots
+                                    claude_content = []
+                                    if clean_result:
+                                        claude_content.append({"type": "text", "text": str(clean_result) if not isinstance(clean_result, str) else clean_result})
+                                    for item in image_items:
+                                        claude_content.append({"type": "image", "source": {"type": "base64", "media_type": item.mimeType, "data": item.data}})
+
                                     tool_results.append({
                                         "type": "tool_result",
                                         "tool_use_id": content_block.id,
-                                        "content": str(clean_result) if not isinstance(clean_result, str) else clean_result,
+                                        "content": claude_content if claude_content else "",
                                     })
 
                             conversation_history.append({"role": "user", "content": tool_results})
@@ -212,6 +220,7 @@ async def handle_chat(request: ExtensionRequest):
 
         except Exception as e:
             import traceback
+            del conversation_history[history_checkpoint:]  # roll back any partial turn
             console.print(f"[bold red]❌ generate() error:[/bold red] {e}", highlight=False)
             traceback.print_exc()
             yield (json.dumps({
