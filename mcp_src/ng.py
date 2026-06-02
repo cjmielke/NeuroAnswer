@@ -148,15 +148,12 @@ def get_neuroglancer_screenshot():
 def show_neuron_segmentation(
     neuron_root_id: int = Field(..., description="MUST be a 64-bit integer ID from the neuron_root_ids list. Do NOT pass a memory_reference_id here."),
     layer_name: str = Field('Layer_Name', description="The layer name, shown in the neuroglancer view. You can use this to provide a custom concise name related to the input query")
-) -> str:
-
+) -> None:
     with viewer.txn() as s:
         s.layers[layer_name] = neuroglancer.SegmentationLayer(
             source=seg_source,
             segments=[neuron_root_id]
         )
-
-    return 'success!'
 
 
 @mcp_server.tool()
