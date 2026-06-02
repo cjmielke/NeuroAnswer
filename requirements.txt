@@ -1,4 +1,5 @@
 anthropic
+platformdirs
 caveclient
 cloud-volume
 fastapi
@@ -14,5 +15,7 @@ matplotlib
 langfuse
 tabulate
 loguru
+pydantic
+
 
 

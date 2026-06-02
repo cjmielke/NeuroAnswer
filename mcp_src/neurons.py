@@ -21,7 +21,7 @@ def query_cells(expression: str, limit: int = 10) -> str:
       "pt_position_z > 800000 and cell_type.str.startswith('L5')"
     Returns matching cells for visualization.
     """
-    results = session.excitatory_cache.query(expression).head(limit)
+    results = session.aibs_metamodel_mtypes_v661_v2.query(expression).head(limit)
 
 
 @mcp_server.tool()
@@ -30,7 +30,7 @@ def search_cells_in_view(x: float, y: float, z: float, radius_nm: float = 15000.
     Finds excitatory cells within a specific radius of the user's current 3D coordinates.
     x, y, z must be in nanometers exactly as given in SYSTEM CONTEXT — do NOT convert them.
     """
-    df = session.excitatory_cache
+    df = session.aibs_metamodel_mtypes_v661_v2
 
     if df is None or df.empty:
         return json.dumps({"summary": "Error: Local connectome dataframe is not loaded."})
@@ -96,7 +96,7 @@ def search_excitatory_population(
 
     Returns a memory_reference_id to be passed to visualization tools.
     """
-    results = session.excitatory_cache[session.excitatory_cache['cell_type'] == mtype].head(limit)
+    results = session.aibs_metamodel_mtypes_v661_v2[session.aibs_metamodel_mtypes_v661_v2['cell_type'] == mtype].head(limit)
     ref_id = session.store_df(results)
 
     if 'pt_root_id' in results.columns:

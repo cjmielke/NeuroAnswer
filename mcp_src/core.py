@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from mcp.server import FastMCP
@@ -6,6 +7,7 @@ from pathlib import Path
 from typing import Dict
 import caveclient
 import pandas as pd
+from platformdirs import user_cache_dir
 
 
 mcp_server = FastMCP("NeuroAnswer", host=os.environ.get("MCP_HOST", "127.0.0.1"), port=8000)
@@ -16,7 +18,7 @@ class ConnectomeSession:
     """Manages the in-memory state so Claude doesn't crash on massive datasets."""
 
     # Cache configuration
-    CACHE_DIR = Path("./data")
+    CACHE_DIR = Path(os.environ.get('CACHE_DIR', user_cache_dir('neuroanswer')))
     CACHE_TIMEOUT_SECONDS = 7 * 24 * 60 * 60  # 1 week in seconds
 
     def __init__(self):
@@ -25,15 +27,13 @@ class ConnectomeSession:
         # Ensure the ./data directory exists
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-        print("Booting NeuroAnswer... Loading Structural Metadata.")
+        logging.info("Booting NeuroAnswer... Loading Structural Metadata.")
 
-        # Load the flagship Excitatory and Inhibitory tables
-        # FIXME - these names are wrong, fundamentally. First table has excitatory and inhibitory
-        # TODO - better understand the underlying schema
-        self.excitatory_cache = self._load_or_fetch_table('aibs_metamodel_mtypes_v661_v2')
-        self.inhibitory_cache = self._load_or_fetch_table('aibs_metamodel_celltypes_v661')
+        # Load the flagship neural type tables
+        self.aibs_metamodel_mtypes_v661_v2 = self._load_or_fetch_table('aibs_metamodel_mtypes_v661_v2')
+        self.aibs_metamodel_celltypes_v661 = self._load_or_fetch_table('aibs_metamodel_celltypes_v661')
 
-        print("Boot complete. Ready for Claude.")
+        logging.info("Boot complete. Ready for Claude.")
 
     def _load_or_fetch_table(self, table_name: str) -> pd.DataFrame:
         """
@@ -48,12 +48,12 @@ class ConnectomeSession:
 
             if file_age_seconds < self.CACHE_TIMEOUT_SECONDS:
                 age_hours = file_age_seconds / 3600
-                print(f"  -> Loaded {table_name} from local cache (Age: {age_hours:.1f} hours)")
+                logging.info(f"  -> Loaded {table_name} from local cache (Age: {age_hours:.1f} hours)")
                 return pd.read_parquet(file_path)
             else:
-                print(f"  -> Cache expired for {table_name} (Older than 1 week). Re-downloading...")
+                logging.info(f"  -> Cache expired for {table_name} (Older than 1 week). Re-downloading...")
         else:
-            print(f"  -> No local cache found for {table_name}. Downloading from CAVE...")
+            logging.info(f"  -> No local cache found for {table_name}. Downloading from CAVE...")
 
         # 2. If we reach here, we need to download it (assumes 'client' is in global scope)
         df = cave_client.materialize.query_table(
@@ -63,7 +63,7 @@ class ConnectomeSession:
         )
 
         if 'pt_position_x' not in df.columns and 'pt_position' in df.columns:
-            print("Unpacking spatial coordinates for optimized distance querying...")
+            logging.info("Unpacking spatial coordinates for optimized distance querying...")
 
             # This is the fastest method to expand a column of lists into separate columns
             df[['pt_position_x', 'pt_position_y', 'pt_position_z']] = pd.DataFrame(
@@ -73,7 +73,7 @@ class ConnectomeSession:
 
         # 3. Save it to disk for next time
         df.to_parquet(file_path, engine='pyarrow', index=False)
-        print(f"  -> Saved {table_name} to local Parquet cache.")
+        logging.info(f"  -> Saved {table_name} to local Parquet cache.")
 
         return df
 

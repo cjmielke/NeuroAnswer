@@ -1,23 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Neuro Copilot",
+  "name": "NeuroAnswer",
   "version": "1.0",
   "description": "AI Agent for Connectomics",
   "permissions": [
-    "sidePanel",
-    "tabs",
-    "activeTab",
-    "scripting"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["*://*/*"],
-      "js": ["content_script.js"],
-      "run_at": "document_idle"
-    }
+    "sidePanel"
   ],
   "action": {
-    "default_title": "Open Neuro Copilot",
+    "default_title": "NeuroAnswer",
     "default_icon": {
       "16": "icon-16.png",
       "48": "icon-48.png",

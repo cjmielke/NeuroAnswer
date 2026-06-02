@@ -2,8 +2,14 @@ services:
   mcp:
     build: .
     command: python mcp_main.py
+    ports:
+      - "8675:8675"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - MCP_HOST=0.0.0.0
+      - CACHE_DIR=/app/data
     volumes:
       #- ~/.cloudvolume:/root/.cloudvolume:ro
       - ./data:/app/data

@@ -4,6 +4,40 @@ An AI copilot for exploring the [MICrONs Minnie65](https://www.microns-explorer.
 
 ![NeuroAnswer Screenshot](img/screenshot1.png)
 
+## v2 Refactor — Claude Sees What You See
+
+The v2 architecture makes a fundamental change: the Neuroglancer viewer is now controlled directly by the MCP server rather than being a separate browser session that the extension had to mirror state into. V1 used the chrome extension and javascript hacks to mutate the state. V2 hosts its own neuroglancer server locally and uses its existing python/websockets API to directly control it. This allows the development of pure MCP NeuroGlancer tools.
+
+This also unlocks a capability that wasn't possible before!
+
+### Claude as co-scientist
+
+Claude can now take a screenshot of the active Neuroglancer viewport and interpret it visually — the same view the researcher is looking at, at the same moment. It can identify cell morphology, count visible structures, notice what's in the foreground vs background, and reason about what it sees before deciding what to query next. Combined with the CAVE tools, this closes a loop: observe → query → render → observe again.
+
+![Claude interpreting a Neuroglancer view](img/vllm.png)
+
+*Claude identifying neurons, and what might be an astrocyte — from a live screenshot of the 3D mesh view.*
+
+### What changed
+
+| | v1                                                                                   | v2                                                                                                                                                                                      |
+|---|--------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Neuroglancer control** | Extension pushed state via URL hash                                                  | MCP server owns the `Viewer` object directly                                                                                                                                            |
+| **Camera / layers** | Extension rewrote the browser URL                                                    | MCP tools call `viewer.txn()` server-side                                                                                                                                               |
+| **Screenshots** | Not possible                                                                         | `viewer.screenshot()` returns rendered image; Claude sees it                                                                                                                            |
+| **Auth** | Chrome cookie / Google OAuth popup                                                   | `MiddleAuthProvider` injects CAVE token server-side                                                                                                                                     |
+| **Chat UI** | Chrome extension sidebar                                                             | Chrome extension sidebar (kept); Claude Desktop tested but doesn't render tool images. *Bonus* : Generated python code is now shown in the UI with syntax highlighting powered by prism |
+| **Transport** | MCP over SSE                                                                         | MCP over SSE (unchanged); stdio available for Claude Desktop                                                                                                                            |
+| **Neuroglancer URL** | Relied on public Neuroglancer servers / chrome extension had to detect the right tab | MCP server hosts its own local NeuroGlancer server                                                                                                                                      |
+
+### Removed
+- `nglui` scene URL construction (layers are now set directly on the viewer)
+- Extension content script that polled and pushed `ng_state`
+- FastAPI endpoints `/scenes` and `/new_scene` (replaced by `reset_neuroglancer_view` MCP tool)
+- Layer / position / scene propagation through the relay response
+
+---
+
 ## What it does
 
 NeuroAnswer connects Claude to the [CAVE](https://caveclient.readthedocs.io/) connectomics database via an MCP (Model Context Protocol) server. Ask a question in plain English — "show me the closest soma" or "trace the downstream synapses of this L5 pyramidal cell" — and the system fetches the data, builds the 3D scene, and renders it in your Neuroglancer view.
@@ -59,19 +93,19 @@ Chrome Extension (sidebar UI)
         ↕
 FastAPI Gateway (relay server)
         ↕
-MCP Server (FastMCP + CAVE client)
+MCP Server (FastMCP)   <->  NeuroGlancer (local server with Python/websockets API)
         ↕
 CAVE / MICrONs Minnie65 cloud database
 ```
 
-The MCP server exposes domain-specific tools — spatial search, synapse queries, scene construction — that Claude calls through the standard MCP protocol. A FastAPI gateway bridges the Chrome extension's HTTP requests to the MCP server. The extension injects a chat sidebar into the Neuroglancer interface and pushes returned scene state (layers, annotations, camera position) directly into the viewer.
+The MCP server exposes domain-specific tools — spatial search, synapse queries, camera control, and scene construction — that Claude calls through the standard MCP protocol. It also hosts the Neuroglancer server directly, so tool calls mutate the viewer state in real time without any browser-side coordination. A FastAPI gateway bridges the Chrome extension's HTTP requests to the MCP server and streams tool results (text, images, syntax-highlighted code) back to the sidebar.
 
 Neuron metadata is cached locally as Parquet files to keep spatial queries fast. Synapse data is fetched live from CAVE on demand - a bit slower, but I'm working on it!
 
 
 ## Built with
 
-Python · FastMCP · CAVEclient · nglui · FastAPI · Chrome Extensions API
+Python · FastMCP · CAVEclient · NeuroGlancer · FastAPI · Chrome Extensions API
 
 ## Installation
 
@@ -89,6 +123,8 @@ To query the structural brain graph, you need a CAVE API token, along with your 
    ANTHROPIC_API_KEY=your_claude_key_here
    CAVE_TOKEN=your_copied_cave_token_here
    LANGFUSE_PUBLIC_KEY=optional_telemetry_key
+   ```
+   `CACHE_DIR` is optional — the server defaults to the OS-appropriate user cache directory. When running via Docker, it is automatically set to `/app/data` (the mounted volume) so no override is needed.
 
 Note, I'm using "LangFuse" to log my chats during development. If you want to do the same, you can
 sign up for a free account, create API keys, and also place them in the .env file. 
@@ -106,7 +142,7 @@ You'll need to install the Google Chrome extension for the fun part. Its not in 
 - In Google Chrome, type `chrome://extensions` in the URL bar and hit enter
 - Enable `developer mode` with the toggle button
 - Click `Load unpacked` and then navigate to the `chrome_extension` directory in this cloned repository
-- When you open the extension, it will inform you if it doesn't see a NeuroGlancer tab, but it will list available datasets
+- When you open the extension, click the **Open Neuroglancer ↗** link at the top of the sidebar to open the locally-hosted viewer
 
 ## Feedback
 

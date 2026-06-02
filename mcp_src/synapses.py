@@ -1,171 +1,159 @@
-import time
-from nglui import statebuilder
-from nglui.statebuilder import PointAnnotation, LineAnnotation
-from pydantic import Field
-from mcp_src.core import mcp_server, cave_client, session
+import logging
 import pandas as pd
 from typing import Literal
-import json
+from pydantic import Field
+import neuroglancer
 
-@mcp_server.tool()
-def get_downstream_synapses(
-    neuron_root_id: int = Field(..., description="MUST be a 64-bit integer ID from the neuron_root_ids list. Do NOT pass a memory_reference_id here."),
-    limit: int = 5,
-    layer_name: str = Field('Output_Synapses', description="The layer name, shown in the neuroglancer view. You can use this to provide a custom concise name related to the input query")
-) -> str:
-    """
-    Queries the structural graph for downstream targets of a specific cell ID.
-    Returns a memory_reference_id to be passed to visualization tools.
-    """
-    df_synapses = cave_client.materialize.query_table(
+from mcp_src.core import mcp_server, cave_client
+
+
+# ---------------------------------------------------------------------------
+# Data functions — plain Python, no MCP, importable into the analysis sandbox
+# ---------------------------------------------------------------------------
+
+def get_downstream_synapses_df(root_id: int, limit: int = None) -> pd.DataFrame:
+    """Fetch outgoing synapses for a neuron. Coordinates returned in nm."""
+    df = cave_client.materialize.query_table(
         'synapses_pni_2',
-        filter_equal_dict={'pre_pt_root_id': neuron_root_id},
+        filter_equal_dict={'pre_pt_root_id': root_id},
         desired_resolution=[1, 1, 1]
     )
-    if df_synapses.empty:
-        return json.dumps({"summary": f"No outgoing synapses found for {neuron_root_id}."})
-    print(f'Got {len(df_synapses)} rows from pre_pt_root_id')
+    if limit:
+        df = df.head(limit)
+    return df
 
 
-    # Get the strongest structural targets (ignoring ID 0)
-    target_counts = df_synapses[df_synapses['post_pt_root_id'] != 0].groupby('post_pt_root_id').size()
-    top_targets = target_counts.sort_values(ascending=False).head(limit)
-
-    # Format into a dataframe to store in our session
-    results_df = pd.DataFrame({
-        'pt_root_id': top_targets.index,
-        'synapse_count': top_targets.values
-    })
-
-    ref_id = session.store_df(results_df)
-
-    # We return the raw IDs to Claude's context here so it can speak about them,
-    # but we also return the ref_id for the visualizer.
-    #return (f"Found strongest targets. IDs: {top_targets.index.tolist()}. "
-    #        f"Data stored for visualization at reference: {ref_id}")
-
-
-    # 2. Sort by size (if available) and limit the count
-    # URLs have a maximum length, so we cannot send 5,000 synapses to the frontend.
-    if 'size' in df_synapses.columns:
-        df_synapses = df_synapses.sort_values('size', ascending=False)
-
-    synapse_subset = df_synapses.head(limit)
-
-
-    # 3. Build Neuroglancer Point Annotations
-    annotations = []
-    post_synaptic_targets = set()
-
-
-    for _, row in synapse_subset.iterrows():
-        # CAVE usually returns the coordinates as a single array: [x, y, z] in voxels
-        pos = row['ctr_pt_position']
-        pre_pos = row['pre_pt_position']
-        post_pos = row['post_pt_position']
-
-        post_synaptic_targets.add(str(row['post_pt_root_id']))      # Track the downstream neurons we are talking to
-
-        # FIXME - inherit voxel sizes from dataset automatically
-        pointAnno = PointAnnotation(
-            id=str(row['id']),                                # The unique synapse ID
-            point=pos,
-            #point=[int(pos[0]), int(pos[1])*4, int(pos[2])*40],    # Your coordinates
-            #point=[int(pos[i])*voxel_res[i] for i in range(3)],
-            description=f"Target: {row['post_pt_root_id']}"   # The text label (optional)
-        )
-        annotations.append(pointAnno)
-
-        lineAnno = LineAnnotation(
-            id=str(row['id']),
-            # Start inside the axon
-            pointA=[int(pre_pos[0]), int(pre_pos[1]), int(pre_pos[2])],
-            # End inside the dendrite
-            pointB=[int(post_pos[0]), int(post_pos[1]), int(post_pos[2])],
-            # Inject the synaptic weight into the UI hover label
-            description=f"Weight: {row['size']} | Target: {row['post_pt_root_id']}"
-        )
-        annotations.append(lineAnno)
-
-    seg_source = cave_client.info.segmentation_source()
-
-    viewer = (
-        statebuilder.ViewerState(dimensions=[1, 1, 1])
-        .add_segmentation_layer(name='3D_Meshes', source=seg_source, segments=[neuron_root_id])
-        .add_annotation_layer(name=layer_name, annotations=annotations, color='#ff0000')
+def get_upstream_synapses_df(root_id: int, limit: int = None) -> pd.DataFrame:
+    """Fetch incoming synapses for a neuron. Coordinates returned in nm."""
+    df = cave_client.materialize.query_table(
+        'synapses_pni_2',
+        filter_equal_dict={'post_pt_root_id': root_id},
+        desired_resolution=[1, 1, 1]
     )
-    state = viewer.to_dict()
+    if limit:
+        df = df.head(limit)
+    return df
 
-    summary = (
-        f"Found {len(df_synapses)} total downstream synapses for {neuron_root_id}. "
-        f"I've mapped the top {limit} largest synapses to your view in red. "
-        f"This neuron connects to {len(post_synaptic_targets)} unique downstream targets in this sample."
+
+def get_synapse_partners_df(
+    root_id: int,
+    direction: Literal['pre', 'post'] = 'pre',
+    limit: int = 10
+) -> pd.DataFrame:
+    """Top synaptic partners ranked by synapse count. direction='pre' → downstream."""
+    src_col = 'pre_pt_root_id' if direction == 'pre' else 'post_pt_root_id'
+    partner_col = 'post_pt_root_id' if direction == 'pre' else 'pre_pt_root_id'
+    df = cave_client.materialize.query_table(
+        'synapses_pni_2',
+        filter_equal_dict={src_col: root_id},
+        desired_resolution=[1, 1, 1]
+    )
+    return (
+        df[df[partner_col] != 0]
+        .groupby(partner_col)
+        .size()
+        .sort_values(ascending=False)
+        .head(limit)
+        .rename('synapse_count')
+        .reset_index()
+        .rename(columns={partner_col: 'pt_root_id'})
     )
 
-    return json.dumps({
-        "summary": summary,
-        "layers": state.get("layers", []),
-        "suggested_position": state.get("position"),
-    })
 
-
-
-
-
-
-
-
-@mcp_server.tool()
-def get_targeted_compartments(
-        post_root_id: int,
-        compartment: Literal['soma', 'shaft', 'spine'] = 'soma'
-) -> str:
-    """
-    Finds all synapses that target a specific compartment of a postsynaptic cell.
-    Use this to find the inhibitory basket (soma targets) or excitatory inputs (spine targets).
-
-    Returns a memory_reference_id containing the 3D coordinates of those synapses.
-    """
-    print(f"Fetching synapses targeting cell {post_root_id}...")
-
-    # 1. Get all synapses where our cell is the receiver (post-synaptic)
+def get_targeted_compartments_df(
+    post_root_id: int,
+    compartment: Literal['soma', 'shaft', 'spine'] = 'soma'
+) -> pd.DataFrame:
+    """Synapses onto a specific compartment of a postsynaptic cell."""
     df_synapses = cave_client.materialize.query_table(
         'synapses_pni_2',
         filter_equal_dict={'post_pt_root_id': post_root_id}
     )
-
     if df_synapses.empty:
-        return f"No synapses found targeting cell {post_root_id}."
-
-    synapse_ids = df_synapses['id'].tolist()
-
-    print(f"Found {len(synapse_ids)} synapses. Fetching compartment predictions...")
-
-    # 2. Surgically query the massive prediction table using ONLY our specific synapse IDs
+        return df_synapses
     df_predictions = cave_client.materialize.query_table(
         'synapse_target_predictions_ssa_v2',
-        filter_in_dict={'id': synapse_ids}  # This prevents the DB from crashing!
+        filter_in_dict={'id': df_synapses['id'].tolist()}
+    )
+    merged = pd.merge(df_synapses, df_predictions, on='id')
+    return merged[merged['target_structure'] == compartment]
+
+
+# ---------------------------------------------------------------------------
+# Viewer functions — mutate the neuroglancer viewer directly
+# ---------------------------------------------------------------------------
+
+def show_synapse_annotations(df: pd.DataFrame, layer_name: str = 'Synapses'):
+    """Render a synapse dataframe as point annotations in the neuroglancer viewer."""
+    from mcp_src.ng import viewer  # late import avoids circular import at module load
+    annotations = []
+    for _, row in df.iterrows():
+        pos = row['ctr_pt_position']
+        point = pos.tolist() if hasattr(pos, 'tolist') else list(pos)
+        annotations.append(neuroglancer.PointAnnotation(
+            id=str(row['id']),
+            point=point,
+            description=f"{row.get('pre_pt_root_id', '?')} → {row.get('post_pt_root_id', '?')} | size: {row.get('size', '?')}"
+        ))
+    with viewer.txn() as s:
+        s.layers[layer_name] = neuroglancer.AnnotationLayer(annotations=annotations)
+    logging.info(f"Rendered {len(annotations)} synapse annotations in layer '{layer_name}'")
+
+
+# ---------------------------------------------------------------------------
+# MCP tools — thin wrappers over the functions above
+# ---------------------------------------------------------------------------
+
+@mcp_server.tool()
+def get_downstream_synapses(
+    root_id: int = Field(..., description="64-bit neuron root ID"),
+    limit: int = Field(200, description="Max synapses to render in viewer"),
+    layer_name: str = Field('Output_Synapses', description="Layer name shown in the viewer"),
+) -> str:
+    """Show the outgoing synapses of a neuron as point annotations in the viewer."""
+    df = get_downstream_synapses_df(root_id)
+    if df.empty:
+        return f"No outgoing synapses found for {root_id}."
+    if 'size' in df.columns:
+        df = df.sort_values('size', ascending=False)
+    show_synapse_annotations(df.head(limit), layer_name)
+    return (
+        f"Found {len(df)} outgoing synapses from {root_id} "
+        f"to {df['post_pt_root_id'].nunique()} unique partners. "
+        f"Showing top {min(limit, len(df))} by size in '{layer_name}'."
     )
 
-    # 3. Join the tables on the shared 'id' column
-    merged = pd.merge(df_synapses, df_predictions, on='id')
 
-    # 4. Filter for the compartment Claude asked for
-    # (Assuming the prediction column is named 'target_structure' or similar;
-    # you may need to check the exact column name via standard df.columns if it fails)
-    filtered = merged[merged['target_structure'] == compartment]
+@mcp_server.tool()
+def get_upstream_synapses(
+    root_id: int = Field(..., description="64-bit neuron root ID"),
+    limit: int = Field(200, description="Max synapses to render in viewer"),
+    layer_name: str = Field('Input_Synapses', description="Layer name shown in the viewer"),
+) -> str:
+    """Show the incoming synapses of a neuron as point annotations in the viewer."""
+    df = get_upstream_synapses_df(root_id)
+    if df.empty:
+        return f"No incoming synapses found for {root_id}."
+    if 'size' in df.columns:
+        df = df.sort_values('size', ascending=False)
+    show_synapse_annotations(df.head(limit), layer_name)
+    return (
+        f"Found {len(df)} incoming synapses to {root_id} "
+        f"from {df['pre_pt_root_id'].nunique()} unique partners. "
+        f"Showing top {min(limit, len(df))} by size in '{layer_name}'."
+    )
 
-    # 5. Standardize the dataframe for the Scene Builder
-    # The synapse table stores coordinates in 'ctr_pt_position', but our scene builder
-    # expects 'pt_position'. We rename it here so the scene builder stays generic.
-    filtered = filtered.rename(columns={'ctr_pt_position': 'pt_position'})
 
-    # We also ensure 'pt_root_id' is set to the main cell so the mesh turns on
-    filtered['pt_root_id'] = post_root_id
-
-    # 6. Store and return the pointer
-    ref_id = session.store_df(filtered)
-
-    return f"Success. Found {len(filtered)} synapses targeting the {compartment}. Data stored at reference: {ref_id}"
-
-
+@mcp_server.tool()
+def get_synapse_partners(
+    root_id: int = Field(..., description="64-bit neuron root ID"),
+    direction: Literal['pre', 'post'] = Field('pre', description="'pre' = downstream targets, 'post' = upstream inputs"),
+    limit: int = Field(10, description="Number of top partners to return"),
+) -> str:
+    """Return the top synaptic partners of a neuron ranked by synapse count."""
+    df = get_synapse_partners_df(root_id, direction, limit)
+    if df.empty:
+        return f"No synaptic partners found for {root_id}."
+    label = "downstream targets" if direction == 'pre' else "upstream inputs"
+    rows = "\n".join(f"  {r['pt_root_id']}: {r['synapse_count']} synapses" for _, r in df.iterrows())
+    return f"Top {label} of {root_id}:\n{rows}"
