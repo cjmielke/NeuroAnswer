@@ -4,6 +4,7 @@ import sys
 from typing import List
 from mcp.types import TextContent, ImageContent
 from matplotlib import pyplot as plt
+import seaborn as sns
 plt.rcParams['svg.fonttype'] = 'none'
 
 from mcp_src.core import mcp_server, cave_client, session
@@ -54,6 +55,7 @@ _sandbox = {
     'np': np,
     'pd': pd,
     'plt': plt,
+    'sns': sns,
     'Image': PILImage,
     'cave_client': cave_client,
     # Synapse data functions

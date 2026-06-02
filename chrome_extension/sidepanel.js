@@ -9,6 +9,12 @@ const sendBtn     = document.getElementById('send-btn');
 
 document.getElementById('ng-btn').href = NEUROGLANCER_URL;
 
+document.getElementById('reset-btn').addEventListener('click', async () => {
+  await fetch(`${API_BASE}/reset`, { method: 'POST' }).catch(() => {});
+  chatHistory.innerHTML = '';
+  appendMessage('System', 'Conversation reset.');
+});
+
 
 // --- CHAT ---
 

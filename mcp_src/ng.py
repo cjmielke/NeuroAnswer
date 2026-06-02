@@ -2,13 +2,17 @@ import base64
 import concurrent.futures
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 import caveclient
 import neuroglancer
 from neuroglancer.credentials_provider import CredentialsProvider
 from neuroglancer.default_credentials_manager import default_credentials_manager
-from mcp.types import ImageContent
+from mcp.types import ImageContent, TextContent
 from mcp_src.core import mcp_server
 from pydantic import Field
+
+SCREENSHOT_DIR = Path(os.environ.get('CACHE_DIR', '/app/data')) / 'screenshots'
 
 neuroglancer.set_server_bind_address(
     bind_address=os.environ.get('NEUROGLANCER_HOST', '0.0.0.0'),
@@ -36,14 +40,14 @@ viewer = neuroglancer.Viewer(
 )
 
 
-def on_select(action_state):
-    logging.info(action_state.to_json())  # see what fires
-def on_state_change():
-  state = viewer.state.to_json()
-  logging.info(state)  # see if selected segment appears anywhere on click
+# def on_select(action_state):
+#     logging.info(action_state.to_json())  # see what fires
+# def on_state_change():
+#     state = viewer.state.to_json()
+#     logging.info(state)  # see if selected segment appears anywhere on click
 
-viewer.shared_state.add_changed_callback(on_state_change)
-viewer.actions.add('select', on_select)
+# viewer.shared_state.add_changed_callback(on_state_change)
+# viewer.actions.add('select', on_select)
 
 
 ds = 'minnie65_public'
@@ -141,7 +145,19 @@ def get_neuroglancer_screenshot():
         action_state = future.result(timeout=15)
     except concurrent.futures.TimeoutError:
         return "Screenshot timed out — open the Neuroglancer viewer in a browser tab first."
-    return [ImageContent(type="image", data=base64.b64encode(action_state.screenshot.image).decode(), mimeType="image/png")]
+
+    image_bytes = action_state.screenshot.image
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    path = SCREENSHOT_DIR / f"{timestamp}.png"
+    path.write_bytes(image_bytes)
+    logging.info(f"Screenshot saved to {path}")
+
+    return [
+        TextContent(type="text", text=f"📸 {timestamp}"),
+        ImageContent(type="image", data=base64.b64encode(image_bytes).decode(), mimeType="image/png"),
+    ]
 
 
 @mcp_server.tool()
