@@ -29,7 +29,10 @@
 </head>
 <body style="display: flex; flex-direction: column;">
 
-  <h3>NeuroAnswer</h3>
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <h3>NeuroAnswer</h3>
+    <button id="reset-btn" title="Clear conversation history" style="background:none; border:none; color:#666; font-size:0.8em; cursor:pointer; padding:0;">reset</button>
+  </div>
   <a id="ng-btn" href="#" target="_blank" style="display:block; margin-bottom:10px; color:#569cd6; font-size:0.85em;">Open Neuroglancer ↗</a>
   <div id="chat-history"></div>
   <div class="input-row">

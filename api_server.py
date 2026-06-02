@@ -1,5 +1,9 @@
+import base64
 import os
 import json
+
+import anthropic
+import cairosvg
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -57,8 +61,22 @@ app.add_middleware(
 )
 
 
-# Tools whose results are consumed by Claude but not surfaced in the chat UI
-SILENT_TOOLS = {"get_neuroglancer_screenshot", "get_neuroglancer_viewer_state"}
+_CLAUDE_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+def _image_block_for_claude(item) -> dict | None:
+    """Return an Anthropic-compatible image block for a tool result item.
+    SVGs are converted to PNG (Claude can't render SVG). Returns None for unsupported types."""
+    if item.mimeType == "image/svg+xml":
+        png_bytes = cairosvg.svg2png(bytestring=base64.b64decode(item.data))
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png_bytes).decode()}}
+    if item.mimeType in _CLAUDE_IMAGE_TYPES:
+        return {"type": "image", "source": {"type": "base64", "media_type": item.mimeType, "data": item.data}}
+    return None
+
+# Images from these tools go to Claude but are not rendered in the chat UI
+SILENT_IMAGE_TOOLS = {"get_neuroglancer_screenshot"}
+# Text results from these tools go to Claude but are not shown in the chat UI
+SILENT_TEXT_TOOLS = {"get_neuroglancer_viewer_state"}
 
 class ExtensionRequest(BaseModel):
     prompt: str
@@ -184,18 +202,21 @@ async def handle_chat(request: ExtensionRequest):
                                         clean_result = raw_text
                                         display_text = raw_text
 
-                                    if content_block.name not in SILENT_TOOLS:
-                                        if display_text:
-                                            yield (json.dumps({"type": "text", "content": display_text}) + "\n").encode('utf-8')
+                                    if content_block.name not in SILENT_TEXT_TOOLS and display_text:
+                                        yield (json.dumps({"type": "text", "content": display_text}) + "\n").encode('utf-8')
+                                    if content_block.name not in SILENT_IMAGE_TOOLS:
                                         for item in image_items:
                                             yield (json.dumps({"type": "image", "content": f"data:{item.mimeType};base64,{item.data}"}) + "\n").encode('utf-8')
 
-                                    # Build tool_result content for Claude — include images so Claude can see screenshots
+                                    # Build tool_result content for Claude
+                                    # SVGs are converted to PNG so Claude can see plots; frontend still receives the original SVG
                                     claude_content = []
                                     if clean_result:
                                         claude_content.append({"type": "text", "text": str(clean_result) if not isinstance(clean_result, str) else clean_result})
                                     for item in image_items:
-                                        claude_content.append({"type": "image", "source": {"type": "base64", "media_type": item.mimeType, "data": item.data}})
+                                        block = _image_block_for_claude(item)
+                                        if block:
+                                            claude_content.append(block)
 
                                     tool_results.append({
                                         "type": "tool_result",
@@ -221,6 +242,16 @@ async def handle_chat(request: ExtensionRequest):
                             }) + "\n").encode('utf-8')
                             return
 
+        except anthropic.BadRequestError as e:
+            if "tool_result" in str(e):
+                # History is corrupted from a previous failed turn — auto-reset
+                conversation_history.clear()
+                console.print("[bold yellow]⚠️  Corrupted history detected — conversation reset.[/bold yellow]")
+                msg = "⚠️ Conversation history got into a bad state and has been automatically reset. Please try again."
+            else:
+                del conversation_history[history_checkpoint:]
+                msg = f"⚠️ API error: {e}"
+            yield (json.dumps({"type": "final", "blocks": [{"type": "text", "content": msg}]}) + "\n").encode('utf-8')
         except Exception as e:
             import traceback
             del conversation_history[history_checkpoint:]  # roll back any partial turn

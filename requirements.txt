@@ -1,4 +1,5 @@
 anthropic
+cairosvg
 platformdirs
 caveclient
 cloud-volume
