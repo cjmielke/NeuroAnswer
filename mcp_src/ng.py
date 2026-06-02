@@ -46,8 +46,8 @@ viewer = neuroglancer.Viewer(
 #     state = viewer.state.to_json()
 #     logging.info(state)  # see if selected segment appears anywhere on click
 
-viewer.shared_state.add_changed_callback(on_state_change)
-viewer.actions.add('select', on_select)
+# viewer.shared_state.add_changed_callback(on_state_change)
+# viewer.actions.add('select', on_select)
 
 
 ds = 'minnie65_public'
