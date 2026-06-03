@@ -1,5 +1,7 @@
 # NeuroAnswer
 
+https://cjmielke.github.io/projects/neuroanswer-demo.mp4
+
 An AI copilot for exploring the [MICrONs Minnie65](https://www.microns-explorer.org/) connectome dataset. NeuroAnswer lets researchers query 200,000+ neurons and 500 million synapses using natural language, with results rendered directly in [Neuroglancer](https://github.com/google/neuroglancer).
 
 ![NeuroAnswer Screenshot](img/screenshot1.png)
