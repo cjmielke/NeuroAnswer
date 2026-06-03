@@ -1,4 +1,8 @@
-https://cjmielke.github.io/projects/neuroanswer-demo.mp4
+
+
+https://github.com/user-attachments/assets/3e292572-f6b6-48c4-867e-5f37672ebca9
+
+
 
 
 # NeuroAnswer
